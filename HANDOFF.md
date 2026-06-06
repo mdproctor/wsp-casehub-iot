@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** c8574fd — init: scaffold casehub-iot — CLAUDE.md, pom.xml, foundation design spec
+**Head commit (project):** e848258 — chore: scaffold Maven modules, add routing table and artifact locations to CLAUDE.md
 
 ---
 
@@ -30,8 +30,3 @@ Start with `iot-api` — the public SPI module. Everything else depends on it.
 - Design spec: `docs/superpowers/specs/2026-06-05-iot-foundation-design.md` (project repo)
 - Research: `casehubio/parent` — `docs/superpowers/research/2026-06-05-home-automation-research.md`
 - Life Layer 9 spec (downstream): `casehubio/parent` — `docs/superpowers/specs/2026-06-05-life-layer9-home-automation.md`
-
-## Notes
-
-- `proj/` symlink needs to be created at session start: `ln -s /Users/mdproctor/claude/casehub/iot proj`
-- Pre-push hook must be activated: `git config core.hooksPath .githooks` in the project repo
