@@ -1,0 +1,9 @@
+branch: issue-8-yaml-fixture-loading
+project-sha: 68b503184ade64ccba29ecd698a59f2ddf3cc958
+date: 2026-06-12
+issue: 8
+issue-repo: casehubio/iot
+covers: 8
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
