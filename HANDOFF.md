@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 6087b16 — docs: sync ARC42STORIES.MD — C3 and C4 chapters complete #4
+**Head commit (project):** 68b5031 — docs: sync ARC42STORIES.MD — stale scan at session wrap
 
 ---
 
@@ -10,26 +10,26 @@
 
 ## Immediate Next Step
 
-Run `/work` and begin Chapter 5 (Bridge Runtime, #5). Lightweight local bridge for cloud/hybrid deployment — forwards StateChangeEvents to cloud CaseHub via WebSocket, relays DeviceCommands back. Both providers (HA + OH) are now complete and can be used for integration testing.
+Run `/work` and begin #8 (YAML fixture loading for iot-testing). User queued three issues in sequence: #12 (done), #8, #11. Start #8 next.
 
 ## What's Left
 
 - Minor code review items from C4 (#13) — HVAC Control+Switch mapping, missing OpenHabCommandDispatchTest, duplicate tagSet() utility, availability per-member vs per-device · S · Low
+- Pre-existing HomeAssistantConfigTest failure — Quarkus startup failure in `@QuarkusTest`, blocks full `mvn install` across all modules · XS · Low
 - PLATFORM.md casehub-iot deep-dive doc — `docs/repos/casehub-iot.md` noted as "pending — create after first module ships" · S · Med
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #5 | Bridge Runtime — cloud/hybrid deployment | M | Med | Start here — final chapter |
-| #8 | YAML fixture loading for iot-testing | S | Low | Deferred; Java fixtures sufficient |
-| #11 | Thing-scoped discovery fallback (OH) | M | Med | For OH installs without semantic model |
-| #12 | Basic auth support (OH) | XS | Low | Token auth only in C4 |
+| #8 | YAML fixture loading for iot-testing | S | Low | Start here — next in queued sequence |
+| #11 | Thing-scoped discovery fallback (OH) | M | Med | Third in queued sequence |
+| #5 | Bridge Runtime — cloud/hybrid deployment | M | Med | Final chapter |
 
 ## Key References
 
-- ARC42STORIES: `ARC42STORIES.MD` (project repo) — C1–C4 ✅, C5 🔲
+- ARC42STORIES: `ARC42STORIES.MD` (project repo) — C1–C4 layers ✅, C5 🔲
 - C4 design spec: `docs/superpowers/specs/2026-06-10-chapter4-openhab-provider-design.md`
-- C3 design spec: `docs/superpowers/specs/2026-06-09-chapter3-homeassistant-provider-design.md`
+- Basic auth spec: `docs/superpowers/specs/2026-06-12-openhab-basic-auth-design.md`
 - Foundation spec: `docs/superpowers/specs/2026-06-05-iot-foundation-design.md`
 - GitHub repo: `casehubio/iot`
