@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 97e5015 — feat(testing): YAML fixture loading — DeviceTypeHandler SPI, 16 handlers, equivalence tests #8
+**Head commit (project):** 0a5b365 — docs: sync ARC42STORIES.MD — dual-layer discovery, shared construction ADR #11 #13
 
 ---
 
@@ -10,25 +10,25 @@
 
 ## Immediate Next Step
 
-Run `/work` and begin #11 (Thing-scoped discovery fallback for OH). This is the last item in the queued sequence: #12 (done), #8 (done), #11.
+Run `/work` and begin #5 (Bridge Runtime — cloud/hybrid deployment). This is the final chapter — all provider work is complete.
 
 ## What's Left
 
-- Minor code review items from C4 (#13) — HVAC Control+Switch mapping, missing OpenHabCommandDispatchTest, duplicate tagSet() utility, availability per-member vs per-device · S · Low
-- Pre-existing HomeAssistantConfigTest failure — Quarkus startup failure in `@QuarkusTest`, blocks full `mvn install` across all modules · XS · Low
-- PLATFORM.md casehub-iot deep-dive doc — `docs/repos/casehub-iot.md` noted as "pending — create after first module ships" · S · Med
-- PLATFORM.md sync for YAML fixture loading — casehubio/parent#237 filed · XS · Low
+- PLATFORM.md casehub-iot deep-dive — in casehub-parent, may need updating after bridge ships · XS · Low
+- Pre-existing HomeAssistantConfigTest was passing cleanly at session end (closed #14 — no longer reproduces) · ✅ resolved
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #11 | Thing-scoped discovery fallback (OH) | M | Med | Next — last in queued sequence |
-| #5 | Bridge Runtime — cloud/hybrid deployment | M | Med | Final chapter |
+| #5 | Bridge Runtime — cloud/hybrid deployment | M | Med | Final chapter (C5) |
+| #16 | thingTypeUID-based DeviceClass inference | S | Med | Enhancement — better accuracy for Thing discovery |
+| #18 | Channel defaultTags exploitation | XS | Low | Enhancement — some bindings populate semantic tags on channels |
 
 ## Key References
 
 - ARC42STORIES: `ARC42STORIES.MD` (project repo) — C1–C4 ✅, C5 🔲
-- YAML fixture spec: `docs/superpowers/specs/2026-06-13-yaml-fixture-loading-design.md`
+- Thing discovery spec: `docs/superpowers/specs/2026-06-14-thing-scoped-discovery-design.md`
+- Thing discovery plan: `docs/superpowers/plans/2026-06-15-thing-scoped-discovery.md`
 - Foundation spec: `docs/superpowers/specs/2026-06-05-iot-foundation-design.md`
 - GitHub repo: `casehubio/iot`
