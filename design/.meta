@@ -1,0 +1,9 @@
+branch: issue-5-bridge-runtime
+project-sha: 0a5b365a522bc200dd67f34081b53357d1cfacf6
+date: 2026-06-15
+issue: 5
+issue-repo: casehubio/iot
+covers: 5
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
