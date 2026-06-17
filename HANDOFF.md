@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 0a5b365 — docs: sync ARC42STORIES.MD — dual-layer discovery, shared construction ADR #11 #13
+**Head commit (project):** bce3e00 — docs: sync ARC42STORIES.MD — stale scan, C3/C4 chapter entries marked ✅ #5
 
 ---
 
@@ -10,25 +10,31 @@
 
 ## Immediate Next Step
 
-Run `/work` and begin #5 (Bridge Runtime — cloud/hybrid deployment). This is the final chapter — all provider work is complete.
+Run `work-end` to close the `issue-5-bridge-runtime` branch. All implementation is complete, reviewed, and docs synced. Build green. Branch ready to merge.
 
 ## What's Left
 
-- PLATFORM.md casehub-iot deep-dive — in casehub-parent, may need updating after bridge ships · XS · Low
-- Pre-existing HomeAssistantConfigTest was passing cleanly at session end (closed #14 — no longer reproduces) · ✅ resolved
+- Wire actual WebSocket command dispatch in BridgeDeviceProvider · S · Med · #22
+- Multi-provider command routing via DeviceRegistry lookup · S · Med · #23
+- Durable store-and-forward for crash-resilient event buffering · M · Med · #20
+- ARC42 toBuilder() claim correction · XS · Low · #21
+- PLATFORM.md + deep-dive sync for bridge modules · XS · Low · casehubio/parent#264
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #5 | Bridge Runtime — cloud/hybrid deployment | M | Med | Final chapter (C5) |
+| #22 | Wire WebSocket command dispatch | S | Med | BridgeDeviceProvider.dispatch() currently returns FAILED |
+| #23 | Multi-provider command routing | S | Med | Agent dispatches to first provider, not by device ownership |
+| #20 | Durable store-and-forward | M | Med | SQLite/file persistent buffer for compliance consumers |
 | #16 | thingTypeUID-based DeviceClass inference | S | Med | Enhancement — better accuracy for Thing discovery |
 | #18 | Channel defaultTags exploitation | XS | Low | Enhancement — some bindings populate semantic tags on channels |
 
 ## Key References
 
-- ARC42STORIES: `ARC42STORIES.MD` (project repo) — C1–C4 ✅, C5 🔲
-- Thing discovery spec: `docs/superpowers/specs/2026-06-14-thing-scoped-discovery-design.md`
-- Thing discovery plan: `docs/superpowers/plans/2026-06-15-thing-scoped-discovery.md`
-- Foundation spec: `docs/superpowers/specs/2026-06-05-iot-foundation-design.md`
+- Bridge spec: `docs/superpowers/specs/2026-06-16-bridge-runtime-design.md`
+- Bridge plan: workspace `plans/2026-06-16-bridge-runtime.md`
+- ARC42STORIES: `ARC42STORIES.MD` — C1–C5 ✅, journey complete
+- Blog: workspace `blog/2026-06-17-mdp05-bridge-runtime.md`
+- Garden: 4 entries submitted (GE-20260617-e3bedc, -13de83, -92fdd9, -6c1e8e)
 - GitHub repo: `casehubio/iot`
