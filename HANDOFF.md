@@ -1,16 +1,16 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** a5533a6 — fix(api): add Jandex index for CDI bean discovery
+**Head commit (project):** 0c84354 — fix(ci): add GitHub Packages config and replace MockWebServer with JDK HttpServer #24
 
 ---
 
 ## What This Repo Is
 
-*Unchanged — `git show HEAD~1:HANDOFF.md`*
+*Unchanged — `git show HEAD~2:HANDOFF.md`*
 
 ## Immediate Next Step
 
-All S/XS/M issues from the previous backlog are done. The branch is closed and merged. Pick new work from GitHub issues or start a new initiative.
+CI is green. One open issue: **#19 — CloudEvent adapter for StateChangeEvent**. Pick it up with `/work`, or start a new initiative.
 
 ## What's Left
 
@@ -20,8 +20,9 @@ All S/XS/M issues from the previous backlog are done. The branch is closed and m
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| — | Server-side audit event log | M | Med | Persistent replayed events transit wire but aren't processed — future audit pipeline needs server-side storage |
-| — | HomeAssistantProviderTest stabilisation | S | Med | MockServer integration tests have timeout flakiness — pre-existing |
+| #19 | CloudEvent adapter for StateChangeEvent | S | Med | Open issue on casehubio/iot |
+| — | Server-side audit event log | M | Med | Persistent replayed events transit wire but aren't processed — future audit pipeline |
+| — | HomeAssistantProviderTest stabilisation | — | — | **DONE** — replaced MockWebServer with JDK HttpServer; all 68 tests green in 3s |
 
 ## Key References
 
