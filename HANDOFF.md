@@ -14,7 +14,7 @@ All S/XS/M issues from the previous backlog are done. The branch is closed and m
 
 ## What's Left
 
-- PLATFORM.md + deep-dive sync for bridge modules · XS · Low · casehubio/parent#264
+*None — backlog clear.*
 
 ## What's Next
 
