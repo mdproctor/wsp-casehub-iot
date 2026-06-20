@@ -1,0 +1,9 @@
+branch: issue-019-cloudevent-adapter
+project-sha: a99ffc5e8c11713991f84ff1a1bfe2e7202e7931
+date: 2026-06-20
+issue: 19
+issue-repo: casehubio/iot
+covers: 19
+flyway-next-v: none
+design-repo: project
+design-section-hashes: 
