@@ -1,5 +1,7 @@
 # Handoff — casehub-iot
 
+*Updated: casehubio/qhorus#300, casehubio/connectors#23 closed — removed from backlog.*
+
 **Head commit (project):** 7e7db4e — docs: sync ARC42STORIES.MD — 10→11 typed subclasses after CameraDevice
 
 ---
@@ -23,8 +25,6 @@ None — all filed issues closed.
 | — | Server-side audit event log | M | Med | Persistent replayed events transit wire but aren't processed |
 | — | Provider auto-discovery (mDNS/SSDP) | S | Med | Plug-and-play bridge deployment on Raspberry Pi |
 | — | Bridge Docker Compose + deployment guide | S | Low | No "run this on your Pi" artifact yet |
-| — | Qhorus CloudEvent adapter | S | Low | Filed: casehubio/qhorus#300 |
-| — | Connectors CloudEvent adapter | S | Low | Filed: casehubio/connectors#23 |
 
 ## Cross-Module
 
