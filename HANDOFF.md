@@ -1,8 +1,6 @@
 # Handoff — casehub-iot
 
-*Updated: casehubio/qhorus#300, casehubio/connectors#23 closed — removed from backlog.*
-
-**Head commit (project):** 7e7db4e — docs: sync ARC42STORIES.MD — 10→11 typed subclasses after CameraDevice
+**Head commit (project):** 5ab6df6 — feat: Docker Compose + deployment guide — #32
 
 ---
 
@@ -22,21 +20,22 @@ None — all filed issues closed.
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| — | Server-side audit event log | M | Med | Persistent replayed events transit wire but aren't processed |
-| — | Provider auto-discovery (mDNS/SSDP) | S | Med | Plug-and-play bridge deployment on Raspberry Pi |
-| — | Bridge Docker Compose + deployment guide | S | Low | No "run this on your Pi" artifact yet |
+| #35 | BridgeAuditStore SPI for structured audit query | M | Med | Deferred from #34 — build when a consuming app has concrete query need |
+| — | Native image Dockerfile (GraalVM) | M | High | Reflection config for DeviceTypeIdResolver needed |
+| — | ARC42STORIES.MD update for deployment + discovery + audit | S | Low | §6 Runtime, §7 Deployment, §8 Crosscutting need new sections |
 
 ## Cross-Module
 
 **We delivered** (other modules can now use):
-- CameraDevice type — casehub-life can observe camera streaming state
-- Bridge health endpoint — operators can monitor bridge connectivity at `/q/health/ready`
-- `casehub-ras` and any CloudEvent consumer can observe `@ObservesAsync CloudEvent` for IoT state changes
+- Docker image `ghcr.io/casehubio/iot-bridge` — ARM64 + x86_64, deploy on Pi with `docker compose up -d`
+- mDNS/SSDP auto-discovery — providers find HA/OpenHAB without explicit URL config
+- `BridgeAuditEvent` CDI events — consuming apps observe `@ObservesAsync BridgeAuditEvent` for audit trail
+- `@LookupIfProperty` provider activation — both providers in one Docker image, each enabled independently
+- Single `casehub.iot.tenancy-id` — no more per-module tenancyId divergence
 
 ## Key References
 
-- CameraDevice + bridge health + error handling spec: `docs/superpowers/specs/2026-06-25-camera-health-errfix-design.md`
-- CloudEvent adapter spec: `docs/superpowers/specs/2026-06-20-cloudevent-adapter-design.md`
-- Bridge spec: `docs/superpowers/specs/2026-06-16-bridge-runtime-design.md`
-- ARC42STORIES: `ARC42STORIES.MD` — C1–C5 ✅, 11 device classes
+- Design spec: `docs/superpowers/specs/2026-06-25-bridge-ops-and-audit-design.md`
+- Deployment guide: `bridge/DEPLOYMENT.md`
+- Diary: `blog/2026-06-26-mdp06-three-walls-between-config-and-runtime.md`
 - GitHub repo: `casehubio/iot`
