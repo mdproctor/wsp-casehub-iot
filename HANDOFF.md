@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 33cc737 — chore: slim dependencyManagement — inherit from casehub-parent BOM (#319)
+**Head commit (project):** e0e7131 — feat: JPA BridgeAuditStore — durable audit persistence with JSONB message storage — Closes #38
 
 ---
 
@@ -10,7 +10,7 @@
 
 ## Immediate Next Step
 
-Start #37 (Reactive `Uni<>` variant for `BridgeAuditStore`), then #38 (JPA `BridgeAuditStore` implementation). Both are deferred-by-design — build when a consuming app has the concrete need.
+No urgent work. #37 (reactive variant) was analysed and deferred — no reactive consumer exists. Next discretionary work: native image Dockerfile or data retention strategy (#40).
 
 ## What's Left
 
@@ -20,18 +20,21 @@ None — all filed issues are deferred by design.
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #37 | Reactive Uni<> variant for BridgeAuditStore | S | Low | Build when a reactive query endpoint is needed |
-| #38 | JPA BridgeAuditStore implementation | M | Med | Build when a consuming app deploys bridge-server with a database |
+| #37 | Reactive Uni<> variant for BridgeAuditStore | S | Low | Build when a genuinely reactive backend warrants a parallel stack — not a blocking-to-reactive bridge |
+| #40 | BridgeAuditStore data retention strategy | S | Med | TTL cleanup, scheduled purge, or partitioning — deployment-specific |
+| #41 | bridge-persistence minor review findings | XS | Low | Test assertion, quarkus-junit consistency, metamodel, Testcontainers |
 | — | Native image Dockerfile (GraalVM) | M | High | Reflection config for DeviceTypeIdResolver needed |
 
 ## Cross-Module
 
 **We delivered** (other modules can now use):
-- `AuditObserverCoexistenceTest` — CDI wiring verification for both audit observers
-- casehubio/parent#317 filed — PLATFORM.md needs BridgeAuditStore capability row
+- `casehub-iot-bridge-persistence-jpa` — add to classpath for durable JPA audit with JSONB message storage
+- `casehub-iot-bridge-persistence-memory` — in-memory ring buffer, `@Alternative @Priority(100)`, for Pi and test isolation
+- `BridgeAuditQuery.offset` — pagination ready for any store implementation
+- casehubio/parent#317 still open — PLATFORM.md needs BridgeAuditStore capability row update
 
 ## Key References
 
-- Spec: `docs/superpowers/specs/2026-06-28-audit-observer-coexistence-test-design.md`
-- Diary: `blog/2026-06-29-mdp06-xs-test-design-review.md`
+- Spec: `docs/superpowers/specs/2026-06-29-jpa-bridge-audit-store-design.md`
+- Plan: `docs/superpowers/plans/2026-06-29-jpa-bridge-audit-store.md`
 - GitHub repo: `casehubio/iot`
