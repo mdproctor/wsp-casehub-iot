@@ -1,5 +1,7 @@
 # Handoff — casehub-iot
 
+*Updated: #37, casehubio/parent#317 closed — removed from backlog.*
+
 **Head commit (project):** e0e7131 — feat: JPA BridgeAuditStore — durable audit persistence with JSONB message storage — Closes #38
 
 ---
@@ -20,7 +22,6 @@ None — all filed issues are deferred by design.
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #37 | Reactive Uni<> variant for BridgeAuditStore | S | Low | Build when a genuinely reactive backend warrants a parallel stack — not a blocking-to-reactive bridge |
 | #40 | BridgeAuditStore data retention strategy | S | Med | TTL cleanup, scheduled purge, or partitioning — deployment-specific |
 | #41 | bridge-persistence minor review findings | XS | Low | Test assertion, quarkus-junit consistency, metamodel, Testcontainers |
 | — | Native image Dockerfile (GraalVM) | M | High | Reflection config for DeviceTypeIdResolver needed |
@@ -31,7 +32,6 @@ None — all filed issues are deferred by design.
 - `casehub-iot-bridge-persistence-jpa` — add to classpath for durable JPA audit with JSONB message storage
 - `casehub-iot-bridge-persistence-memory` — in-memory ring buffer, `@Alternative @Priority(100)`, for Pi and test isolation
 - `BridgeAuditQuery.offset` — pagination ready for any store implementation
-- casehubio/parent#317 still open — PLATFORM.md needs BridgeAuditStore capability row update
 
 ## Key References
 
