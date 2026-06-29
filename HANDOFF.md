@@ -20,7 +20,6 @@ No urgent work. Bridge persistence stack is feature-complete for current needs. 
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #42 | PostgreSQL table partitioning for bridge_audit_event | M | Med | Deferred from #40 — relevant at multi-year retention with millions of rows |
 | — | Native image Dockerfile (GraalVM) | M | High | Reflection config for DeviceTypeIdResolver needed |
 
 ## Cross-Module
