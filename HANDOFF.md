@@ -1,3 +1,5 @@
+*Updated: parent#325 closed — removed from backlog.*
+
 # Handoff — casehub-iot
 
 **Head commit (project):** d3c358f — feat: IoT webapp — operational console with situational awareness — Closes #44
@@ -14,7 +16,6 @@ Publish cross-repo dependencies (`casehub-ras`, `casehub-engine`, `casehub-work`
 
 ## What's Left
 
-- casehubio/parent#325 — PLATFORM.md sync for BridgeAuditStore retention capability · XS · Low
 - casehubio/iot#45 — minor review findings: SSE tenancy filtering with @RequestScoped, platform scope, stub cleanup · S · Low
 - casehubio/iot#46 — evaluate extracting webapp domain logic to application-tier repo · M · Med
 - casehub-ras#23 — promote SituationDefinitionProvider to casehub-ras-api · S · Low
