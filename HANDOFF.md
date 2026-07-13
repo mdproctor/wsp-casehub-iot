@@ -1,49 +1,52 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 7ce9837 — fix: webapp review findings, per-provider refresh, disabled tests, ARC42 update
+**Head commit (project):** 0943115 — feat: CbrConfig wiring and schema registration in IoT CaseHubs (#49)
 
 ---
 
 ## What This Repo Is
 
-Foundation IoT device abstraction layer for CaseHub. Typed device hierarchy, provider SPIs, Home Assistant/OpenHAB implementations, bridge runtime, and operational webapp console.
+*Unchanged — retrieve with: `git show HEAD~1:HANDOFF.md`*
 
 ## Immediate Next Step
 
-Pick up #48/#49 (CBR epic — design-first) or #46 (evaluate webapp extraction to app tier).
+Run `work-end` on branch `issue-49-cbr-infrastructure` to complete the close. Pre-close sweep and code review are done (0 findings). Remaining: rebase onto main, squash, push. Main has commit d91e0e8 (#59 fix: work-adapter artifact swap) — rebase will pick it up.
 
-## What Was Done (2026-07-10)
+## What Was Done (2026-07-11 → 2026-07-13)
 
-**Branch:** `issue-45-webapp-review-and-cleanup` — closed, landed as 7ce9837 on main.
-**Closed:** #45, #43, #53, #54
+**Branch:** `issue-49-cbr-infrastructure` — implementation complete, work-end in progress.
 
-- **SSE tenancy filtering (#45)** — moved from broadcast-time `@ObservesAsync` (broken with `@RequestScoped` principal) to per-client `stream()`. Broadcaster changed from `String` to `DeviceResponse` for per-client filtering.
-- **Platform scope (#45)** — `casehub-platform` set to `runtime` in webapp pom.xml.
-- **Stub cleanup (#45)** — removed unused `EntityManager` injection from `CaseResource` and `WorkItemResource`.
-- **Per-provider refresh (#43)** — `DeviceRegistry.refresh(String)` added to SPI. `CdiDeviceRegistry` implementation rediscovers only the target provider. `POST /api/providers/{providerId}/refresh` endpoint added.
-- **Disabled tests (#53)** — fixed upstream in `casehub-ras-api` (branch `issue-34-jackson-type-info` on casehubio/casehub-ras). Added `@JsonTypeInfo`/`@JsonSubTypes` to `TriggerAction`, `ChainMode`, `TriggerMode` sealed interfaces. All 3 tests now pass.
-- **ARC42STORIES (#54)** — added L7 Webapp API, L8 Webapp Drools, L9 Webapp Console layers and Chapter 7 entry.
+- **JPA CbrCaseMemoryStore** — `memory-cbr-jpa` module in neocortex (428454a on neocortex main). 111 contract tests.
+- **IoT feature schemas** — `IoTCbrFeatureSchemas` with similarity tables. **Extractors** with temporal derivation.
+- **CbrConfig wiring** — all four CaseHubs configured. Schema registration at startup.
+- **Design reviewed** — 4-round adversarial review, 16 issues, all resolved.
+- **#59 fixed** — swapped stale `casehub-engine-work-adapter` → `casehub-work-engine-adapter`. Build green.
+- **Garden** — GE-20260713-b879b2 (H2 JSONB gotcha).
 
 ## Cross-Repo Changes
 
-- **casehubio/casehub-ras** — branch `issue-34-jackson-type-info` pushed (not merged). Issue #34. Adds Jackson `@JsonTypeInfo` to sealed types in `casehub-ras-api`. Installed to local Maven repo.
+- **neocortex** — 428454a on main: `memory-cbr-jpa` module.
+- **work** — engine-adapter PlanItemStatus → TaskStatus fix (local, not pushed).
+- **engine** — rebuilt locally, installed to ~/.m2.
 
 ## What's Left
 
-- casehubio/iot#46 — evaluate extracting webapp domain logic to application-tier repo · M · Med
+- Complete work-end for #49 · XS · Low
+- #57 — case file population with device metadata · M · Med
+- #58 — CBR retention/purge policy · S · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #48 | CBR epic — case-based reasoning for IoT | — | — | Design-first; start with #49 |
-| #46 | Evaluate webapp extraction to app tier | M | Med | PLATFORM.md boundary question |
-| — | Native image Dockerfile (GraalVM) | M | High | Reflection config for DeviceTypeIdResolver |
-| — | Situation definition editor form in pages | M | Med | Runtime CRUD already wired |
-| — | Merge casehub-ras#34 to ras main | XS | Low | Jackson type info — currently on branch |
+| #50 | Situation resolution suggestion via CBR | M | Med | Consumes #49 |
+| #51 | Work item outcome prediction via CBR | M | Med | Consumes #49 |
+| #52 | False-positive suppression via CBR | M | Med | Consumes #49 |
+| #46 | Evaluate webapp extraction to app tier | M | Med | |
 
 ## Key References
 
-- Garden: GE-20260707-50052f — Quarkiverse extension version mismatch gotcha
-- CI: green as of 7ce9837
-- GitHub repo: `casehubio/iot`
+- Spec: `docs/superpowers/specs/2026-07-12-cbr-infrastructure-design.md`
+- Plan: `docs/plans/2026-07-12-cbr-infrastructure.md`
+- Garden: GE-20260713-b879b2
+- Review: `~/adr/casehub-iot/cbr-infrastructure-20260712-205510/`
