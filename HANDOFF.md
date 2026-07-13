@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 0943115 — feat: CbrConfig wiring and schema registration in IoT CaseHubs (#49)
+**Head commit (project):** 1a14a12 — feat: populate case file with device metadata for CBR feature extraction (#57)
 
 ---
 
@@ -10,42 +10,35 @@
 
 ## Immediate Next Step
 
-#49 landed as `0718a53` on main. Branch stamped. Pick up next work — #57 (case file population with device metadata) is the natural successor, feeding CBR feature extraction.
+Pick up CBR retrieval work. #50 (situation resolution suggestion via CBR) is the natural next — it consumes the feature extraction pipeline built in #49 and #57.
 
-## What Was Done (2026-07-11 → 2026-07-13)
+## What Was Done (2026-07-13)
 
-**Branch:** `issue-49-cbr-infrastructure` — implementation complete, work-end in progress.
+**Branch:** `issue-57-case-file-device-metadata` — closed, landed as `1a14a12`.
 
-- **JPA CbrCaseMemoryStore** — `memory-cbr-jpa` module in neocortex (428454a on neocortex main). 111 contract tests.
-- **IoT feature schemas** — `IoTCbrFeatureSchemas` with similarity tables. **Extractors** with temporal derivation.
-- **CbrConfig wiring** — all four CaseHubs configured. Schema registration at startup.
-- **Design reviewed** — 4-round adversarial review, 16 issues, all resolved.
-- **#59 fixed** — swapped stale `casehub-engine-work-adapter` → `casehub-work-engine-adapter`. Build green.
-- **Garden** — GE-20260713-b879b2 (H2 JSONB gotcha).
+- **CaseInputContributor SPI** — new extension point in `casehub-ras-api` (casehubio/casehub-ras#37, `e2d3770` on ras main). `DefaultCaseTrigger` discovers implementations via CDI and merges their contributions into the case input map.
+- **IoTCaseInputContributor** — resolves deviceId from correlationKey (`device/<id>`), looks up DeviceEntity from DeviceRegistry, contributes `deviceClass`, `roomType`, `eventTimestamp` to the case working layer.
+- **DeviceEntity.location** — nullable String field added. OpenHAB wires from `thing.location()`. HA area registry integration pending.
+- **DeviceResponse** — now exposes `location` (was hardcoded `null`).
 
 ## Cross-Repo Changes
 
-- **neocortex** — 428454a on main: `memory-cbr-jpa` module.
-- **work** — engine-adapter PlanItemStatus → TaskStatus fix (local, not pushed).
-- **engine** — rebuilt locally, installed to ~/.m2.
+- **casehub-ras** — `e2d3770` on main: `CaseInputContributor` SPI + `DefaultCaseTrigger` integration. casehubio/casehub-ras#37 closed.
 
 ## What's Left
 
-- #57 — case file population with device metadata · M · Med
 - #58 — CBR retention/purge policy · S · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #50 | Situation resolution suggestion via CBR | M | Med | Consumes #49 |
-| #51 | Work item outcome prediction via CBR | M | Med | Consumes #49 |
-| #52 | False-positive suppression via CBR | M | Med | Consumes #49 |
+| #50 | Situation resolution suggestion via CBR | M | Med | Consumes #49 + #57 |
+| #51 | Work item outcome prediction via CBR | M | Med | Consumes #49 + #57 |
+| #52 | False-positive suppression via CBR | M | Med | Consumes #49 + #57 |
 | #46 | Evaluate webapp extraction to app tier | M | Med | |
 
 ## Key References
 
 - Spec: `docs/superpowers/specs/2026-07-12-cbr-infrastructure-design.md`
-- Plan: `docs/plans/2026-07-12-cbr-infrastructure.md`
-- Garden: GE-20260713-b879b2
-- Review: `~/adr/casehub-iot/cbr-infrastructure-20260712-205510/`
+- Garden: GE-20260713-b879b2 (H2 JSONB gotcha)
