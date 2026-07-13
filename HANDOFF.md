@@ -10,7 +10,7 @@
 
 ## Immediate Next Step
 
-Run `work-end` on branch `issue-49-cbr-infrastructure` to complete the close. Pre-close sweep and code review are done (0 findings). Remaining: rebase onto main, squash, push. Main has commit d91e0e8 (#59 fix: work-adapter artifact swap) — rebase will pick it up.
+#49 landed as `0718a53` on main. Branch stamped. Pick up next work — #57 (case file population with device metadata) is the natural successor, feeding CBR feature extraction.
 
 ## What Was Done (2026-07-11 → 2026-07-13)
 
@@ -31,7 +31,6 @@ Run `work-end` on branch `issue-49-cbr-infrastructure` to complete the close. Pr
 
 ## What's Left
 
-- Complete work-end for #49 · XS · Low
 - #57 — case file population with device metadata · M · Med
 - #58 — CBR retention/purge policy · S · Low
 
