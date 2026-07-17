@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** e43a181 — feat: situation resolution suggestion via CBR (#50)
+**Head commit (project):** 357928e — feat: CBR temporal recency weighting (#64)
 
 ---
 
@@ -16,28 +16,27 @@ Pick up the queue infrastructure pipeline. The dependency chain is:
 3. #62 (CBR-aware case triage) — blocked by engine#730
 4. #63 (LLM resolution agent) — blocked by #62
 
-Alternatively, pick up #58 (CBR retention/purge policy) — independent of the queue pipeline.
+Alternatively: #51 (work item outcome prediction) or #52 (false-positive suppression) — both independent of the queue pipeline.
 
-## What Was Done (2026-07-14)
+## What Was Done (2026-07-17)
 
-**Branch:** `issue-50-cbr-situation-resolution` — closed, landed as `e43a181`.
+**Branch:** `issue-58-cbr-refinements` — closed, landed as `357928e`.
+**Covers:** #58, #64, #65 — all three CBR refinements on one branch.
 
-- **IoTCbrRetrievalService** (webapp-api, Tier 1) — queries the CBR case base for similar past resolutions. Uses `CbrConfig` directly from `CaseDefinition` as single source of truth for weights, topK, minSimilarity.
-- **ResolutionSuggestion** and **ResolutionConfidence** DTOs — structured results with per-feature similarity breakdown and outcome consistency computation.
-- **REST endpoints** on `CaseResource`: `GET /api/cases/{caseId}/suggestions` (on-demand retrieval), `POST /api/cases/{caseId}/suggestions/{pastCaseId}/accept` (idempotent plan pre-fill).
-- **Suggestions panel** in case detail TypeScript UI — "Resolution Suggestions" table between Worker Results and Actions.
-- **Design spec** covering the full pipeline: CBR retrieval → case queues → triage → LLM resolution (§1-§8). Design review: 3 rounds, 24 issues resolved.
-- **6 cross-repo issues filed**: platform#175 (queue toolkit), engine#730 (case queue), #62 (triage), #63 (LLM agent), #64 (temporal recency), #65 (situation surfacing).
+- **CbrRetentionJob** (#58) — `@Scheduled` purge calling `store.purge(CbrRetentionPolicy)`. Config-driven `max-age-days` and `max-cases-per-type`, skip-if-unconfigured. Depends on neocortex#150.
+- **Temporal decay** (#64) — wired `CbrConfig.temporalDecayHalfLifeDays()` through `IoTCbrRetrievalService` into `CbrQuery.withTemporalDecay(HalfLife)`. Depends on engine#733 + neocortex#151.
+- **Situation surfacing** (#65) — `GET /api/situations/{situationId}/suggestions` on `SituationResource`. Fixed `IoTCaseInputContributor` to propagate `situationId` unconditionally (design review catch).
+- **Cross-repo issues filed and completed:** neocortex#150 (retention), neocortex#151 (temporal decay), engine#733 (CbrConfig field).
+- **Design review:** 3 rounds, 13 issues, 12 verified, 1 accepted. $12.31.
+- **Also fixed:** `CbrQuery.of()` and `ScoredCbrCase` constructor changes from upstream neocortex SNAPSHOT.
 
 ## Cross-Repo Changes
 
-None — all work in casehub-iot. Cross-repo issues filed but no code changes in other repos.
+Issues filed and completed in neocortex (#150, #151) and engine (#733). No direct code changes — those repos implemented their own issues.
 
 ## What's Left
 
-- #58 — CBR case base retention and purge policy · S · Low
-- #64 — CBR temporal recency weighting · S · Med
-- #65 — Situation-level suggestion surfacing · S · Med
+*Nothing trailing from this branch.*
 
 ## What's Next
 
@@ -47,12 +46,12 @@ None — all work in casehub-iot. Cross-repo issues filed but no code changes in
 | engine#730 | Case queue implementation | M | Med | Blocked by platform#175 |
 | #62 | CBR-aware case triage | M | Med | Blocked by engine#730 |
 | #63 | LLM resolution agent | L | High | Blocked by #62 |
-| #51 | Work item outcome prediction via CBR | M | Med | Independent of queue pipeline |
-| #52 | False-positive suppression via CBR | M | Med | Independent of queue pipeline |
+| #51 | Work item outcome prediction via CBR | M | Med | Independent |
+| #52 | False-positive suppression via CBR | M | Med | Independent |
 | #46 | Evaluate webapp extraction to app tier | M | Med | |
 
 ## Key References
 
-- Spec: `docs/superpowers/specs/2026-07-14-cbr-situation-resolution-design.md`
-- Garden: GE-20260612-bd3b4d (degenerate CBR), GE-20260713-b879b2 (H2 JSONB)
-- Design review: `~/adr/casehub-iot/cbr-situation-resolution-20260714-022613/tracker.md`
+- Spec: `docs/superpowers/specs/2026-07-16-cbr-refinements-design.md`
+- Design review: `~/adr/casehub-iot/cbr-refinements-20260716-145251/tracker.md`
+- Garden: GE-20260717-34ba5f (IntelliJ MCP lifecycle timeout)
