@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 357928e — feat: CBR temporal recency weighting (#64)
+**Head commit (project):** 96fe952 — feat: work item outcome prediction via CBR (#51)
 
 ---
 
@@ -16,23 +16,24 @@ Pick up the queue infrastructure pipeline. The dependency chain is:
 3. #62 (CBR-aware case triage) — blocked by engine#730
 4. #63 (LLM resolution agent) — blocked by #62
 
-Alternatively: #51 (work item outcome prediction) or #52 (false-positive suppression) — both independent of the queue pipeline.
+Alternatively: #52 (false-positive suppression via CBR) — independent.
 
-## What Was Done (2026-07-17)
+## What Was Done (2026-07-18)
 
-**Branch:** `issue-58-cbr-refinements` — closed, landed as `357928e`.
-**Covers:** #58, #64, #65 — all three CBR refinements on one branch.
+**Branch:** `issue-51-work-item-outcome-prediction` — closed, landed as `96fe952`.
+**Covers:** #51.
 
-- **CbrRetentionJob** (#58) — `@Scheduled` purge calling `store.purge(CbrRetentionPolicy)`. Config-driven `max-age-days` and `max-cases-per-type`, skip-if-unconfigured. Depends on neocortex#150.
-- **Temporal decay** (#64) — wired `CbrConfig.temporalDecayHalfLifeDays()` through `IoTCbrRetrievalService` into `CbrQuery.withTemporalDecay(HalfLife)`. Depends on engine#733 + neocortex#151.
-- **Situation surfacing** (#65) — `GET /api/situations/{situationId}/suggestions` on `SituationResource`. Fixed `IoTCaseInputContributor` to propagate `situationId` unconditionally (design review catch).
-- **Cross-repo issues filed and completed:** neocortex#150 (retention), neocortex#151 (temporal decay), engine#733 (CbrConfig field).
-- **Design review:** 3 rounds, 13 issues, 12 verified, 1 accepted. $12.31.
-- **Also fixed:** `CbrQuery.of()` and `ScoredCbrCase` constructor changes from upstream neocortex SNAPSHOT.
+- **WorkItemPredictionService** — aggregation layer computing weighted outcome distribution, resolution time percentiles (COMPLETED-only), and assignee rankings with controllable success rates. Uses `FeatureVectorCbrCase` (existing CBR type) with case type `"iot-work-item"`.
+- **WorkItemOutcomeRecorder** — `WorkItemObserver` implementation storing completed work items as CBR cases. Reads IoT context from work item payload; falls back to `CaseInstanceCache` for pre-enrichment work items.
+- **WorkItemFeatureExtractor** — shared extraction between retain and retrieve paths. Reuses `IoTCbrFeatureExtractors.deriveTemporalFeatures()` via new `Instant` overload.
+- **HumanDecisionWorkerFunction** — replaced stub with real `WorkItemCreator` integration. Embeds IoT context (caseId, deviceClass, roomType, eventTimestamp) in work item payload.
+- **REST endpoint** — `GET /api/workitems/{id}/prediction` on `WorkItemResource`.
+- **Design review:** 4 rounds, 21 issues, 20 verified, 1 accepted. $16.69.
+- **Garden entry:** GE-20260718-207fde (WorkItemService constructor NPE blocks subclassing for tests).
 
 ## Cross-Repo Changes
 
-Issues filed and completed in neocortex (#150, #151) and engine (#733). No direct code changes — those repos implemented their own issues.
+None. Used existing `FeatureVectorCbrCase` from neocortex — no cross-repo changes needed.
 
 ## What's Left
 
@@ -46,12 +47,12 @@ Issues filed and completed in neocortex (#150, #151) and engine (#733). No direc
 | engine#730 | Case queue implementation | M | Med | Blocked by platform#175 |
 | #62 | CBR-aware case triage | M | Med | Blocked by engine#730 |
 | #63 | LLM resolution agent | L | High | Blocked by #62 |
-| #51 | Work item outcome prediction via CBR | M | Med | Independent |
 | #52 | False-positive suppression via CBR | M | Med | Independent |
 | #46 | Evaluate webapp extraction to app tier | M | Med | |
 
 ## Key References
 
-- Spec: `docs/superpowers/specs/2026-07-16-cbr-refinements-design.md`
-- Design review: `~/adr/casehub-iot/cbr-refinements-20260716-145251/tracker.md`
-- Garden: GE-20260717-34ba5f (IntelliJ MCP lifecycle timeout)
+- Spec: `docs/superpowers/specs/2026-07-18-work-item-outcome-prediction-design.md`
+- Design review: `~/adr/casehub-iot/work-item-outcome-prediction-20260718-013523/tracker.md`
+- Blog: `2026-07-18-mdp01-case-type-already-there.md`
+- Garden: GE-20260718-207fde (WorkItemService constructor NPE), GE-20260717-34ba5f (IntelliJ MCP lifecycle timeout)
