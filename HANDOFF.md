@@ -1,3 +1,5 @@
+*Updated: platform#175 closed — removed from backlog. Dependency chain updated.*
+
 # Handoff — casehub-iot
 
 **Head commit (project):** 96fe952 — feat: work item outcome prediction via CBR (#51)
@@ -11,8 +13,8 @@
 ## Immediate Next Step
 
 Pick up the queue infrastructure pipeline. The dependency chain is:
-1. casehubio/platform#175 (generic queue toolkit) — no blockers, start here
-2. casehubio/engine#730 (case queue implementation) — blocked by platform#175
+1. ~~casehubio/platform#175 (generic queue toolkit)~~ — **CLOSED**
+2. casehubio/engine#730 (case queue implementation) — **now unblocked**, start here
 3. #62 (CBR-aware case triage) — blocked by engine#730
 4. #63 (LLM resolution agent) — blocked by #62
 
@@ -43,8 +45,7 @@ None. Used existing `FeatureVectorCbrCase` from neocortex — no cross-repo chan
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| platform#175 | Generic queue toolkit | M | Med | Unblocks engine#730 |
-| engine#730 | Case queue implementation | M | Med | Blocked by platform#175 |
+| engine#730 | Case queue implementation | M | Med | **Unblocked** — platform#175 landed |
 | #62 | CBR-aware case triage | M | Med | Blocked by engine#730 |
 | #63 | LLM resolution agent | L | High | Blocked by #62 |
 | #52 | False-positive suppression via CBR | M | Med | Independent |
