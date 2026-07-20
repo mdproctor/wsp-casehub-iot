@@ -1,3 +1,5 @@
+*Updated: engine#730 closed — removed from backlog, #62 now unblocked.*
+
 # Handoff — casehub-iot
 
 **Head commit (project):** 9f51997 — feat: false-positive suppression via CBR (#52)
@@ -12,8 +14,8 @@
 
 Pick up the queue infrastructure pipeline. The dependency chain is:
 1. ~~casehubio/platform#175 (generic queue toolkit)~~ — **CLOSED**
-2. casehubio/engine#730 (case queue implementation) — **unblocked**, start here
-3. #62 (CBR-aware case triage) — blocked by engine#730
+2. ~~casehubio/engine#730 (case queue implementation)~~ — **CLOSED**
+3. #62 (CBR-aware case triage) — **unblocked**, start here
 4. #63 (LLM resolution agent) — blocked by #62
 
 Alternatively: #46 (evaluate webapp extraction to app tier) — independent.
@@ -46,8 +48,7 @@ ras branch `issue-52-policy-decision-suppress` (2 commits) — not yet merged to
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| engine#730 | Case queue implementation | M | Med | **Unblocked** — platform#175 landed |
-| #62 | CBR-aware case triage | M | Med | Blocked by engine#730 |
+| #62 | CBR-aware case triage | M | Med | **Unblocked** — engine#730 landed |
 | #63 | LLM resolution agent | L | High | Blocked by #62 |
 | #46 | Evaluate webapp extraction to app tier | M | Med | |
 
