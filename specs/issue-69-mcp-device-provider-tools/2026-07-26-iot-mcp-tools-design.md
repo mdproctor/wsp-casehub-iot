@@ -71,7 +71,12 @@ List all devices with optional filters.
 |------|----------|-------------|
 | `deviceClass` | no | `"Filter by device class. Valid values: SWITCH, LIGHT, THERMOSTAT, SENSOR, PRESENCE_SENSOR, POWER_SENSOR, LOCK, COVER, MEDIA_PLAYER, FAN, CAMERA. Case-insensitive."` |
 | `providerId` | no | `"Filter by provider ID (e.g. 'homeassistant', 'openhab')."` |
-| `available` | no | `"Filter by availability: 'true' for online devices, 'false' for offline."` |
+| `available` | no | `"Filter by availability: true for online devices, false for offline."` |
+
+**`available` type:** `Boolean` — declared as a native boolean parameter.
+The MCP schema becomes `"type": "boolean"` and the LLM produces JSON
+`true`/`false` directly. Null means no filter (all devices returned).
+Consistent with `DeviceResource.list()` which uses `@QueryParam Boolean`.
 
 **Implementation:** `DeviceRegistry.findAll()` → validate `deviceClass`
 if provided (case-insensitive `DeviceClass.valueOf()`) → filter → project
@@ -163,7 +168,7 @@ containing escaped JSON inside the already-JSON tool call).
 - Provider not found: `"Failed: Provider not found: <providerId>"`
 - Dispatch exception: `"Failed: <exception message>"`
 - Dispatch timeout (30s safety net): `"Failed: Command timed out after 30s (correlationId=<id>)"`
-- TIMEOUT/FAILED result: `"Command <action> to <deviceId> result: FAILED (correlationId=<id>)"`
+- Non-SENT result: `"Command <action> to <deviceId> result: <result> (correlationId=<id>)"` where `<result>` is the `CommandResult` enum value (`FAILED` or `TIMEOUT`). The distinction matters for agent retry decisions: FAILED means the command was rejected (retry likely futile), TIMEOUT means confirmation wasn't received (retry risks double-execution).
 
 **`dispatchedBy`:** Hardcoded to `"mcp-agent"`. Principal propagation is a
 cross-repo prerequisite (life#60 §8) — when delivered, this becomes the
@@ -250,7 +255,8 @@ injection, so tests instantiate it directly with `MockDeviceRegistry` and
 | `sendCommandHandlesDispatchFailure` | Exception → `"Failed: ..."` |
 | `sendCommandPassesParametersMap` | Map argument → DeviceCommand parameters |
 | `sendCommandHandlesNullParameters` | null → empty Map |
-| `sendCommandReportsNonSentResult` | FAILED/TIMEOUT result reported |
+| `sendCommandReportsFailedResult` | FAILED result → `"result: FAILED"` message |
+| `sendCommandReportsTimeoutResult` | TIMEOUT result → `"result: TIMEOUT"` message |
 | `sendCommandTimesOutAfter30Seconds` | Safety timeout returns `"Failed: Command timed out..."` |
 | `getDevicesReturnsErrorForInvalidDeviceClass` | Invalid enum → error with valid values |
 | `getDevicesMatchesDeviceClassCaseInsensitively` | "light" matches LIGHT |
