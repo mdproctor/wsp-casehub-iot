@@ -93,13 +93,16 @@ discovery-level fields only — full typed state is available via
     "label": "Living Room Light",
     "providerId": "homeassistant",
     "location": "Living Room",
-    "available": true
+    "available": true,
+    "lastUpdated": "2026-07-26T10:30:00Z"
   }
 ]
 ```
 
 This separates device discovery from state inspection, keeping list
-responses token-efficient for LLM context windows.
+responses token-efficient for LLM context windows. `lastUpdated` is
+included so agents can assess data freshness without calling
+`iot_get_state` on every device.
 
 **Error:** Empty array `[]` when no devices match (not an error condition).
 
@@ -136,7 +139,14 @@ Send a command to a device.
 |------|----------|-------------|
 | `deviceId` | yes | `"Target device ID (e.g. 'light.living_room'). Use iot_get_devices to find available devices."` |
 | `action` | yes | `"Command action: turn_on, turn_off, set_temperature, lock, unlock, set_position, set_volume."` |
-| `parameters` | no | `"Command parameters as JSON object (e.g. {\"temperature\": 22.0, \"unit\": \"CELSIUS\"} for set_temperature, {\"position\": 50} for set_position, {\"volume\": 75} for set_volume). Not needed for turn_on, turn_off, lock, unlock."` |
+| `parameters` | no | `"Command parameters (e.g. {\"temperature\": 22.0, \"unit\": \"CELSIUS\"} for set_temperature, {\"position\": 50} for set_position, {\"volume\": 75} for set_volume). Not needed for turn_on, turn_off, lock, unlock."` |
+
+**`parameters` type:** `Map<String, Object>` — declared as a native map
+parameter, not a JSON string. The Quarkus MCP framework handles
+deserialization via `FeatureManagerBase.handleParam()` which uses
+`ObjectMapper.convertValue()` for Map arguments. This avoids
+double-encoding (the LLM would otherwise have to produce a JSON string
+containing escaped JSON inside the already-JSON tool call).
 
 **Implementation:**
 1. `DeviceRegistry.findById(deviceId)` — validate device exists
@@ -151,7 +161,7 @@ Send a command to a device.
 **Errors:**
 - Device not found: `"Failed: Device not found: <deviceId>"`
 - Provider not found: `"Failed: Provider not found: <providerId>"`
-- Dispatch failure: `"Failed: <exception message>"`
+- Dispatch exception: `"Failed: <exception message>"`
 - Dispatch timeout (30s safety net): `"Failed: Command timed out after 30s (correlationId=<id>)"`
 - TIMEOUT/FAILED result: `"Command <action> to <deviceId> result: FAILED (correlationId=<id>)"`
 
@@ -172,9 +182,16 @@ Single `@ApplicationScoped` bean. Three `@Tool`-annotated methods, all
 Constructor-injected: `DeviceRegistry`, `Instance<DeviceProvider>`,
 Jackson `ObjectMapper`.
 
-`ObjectMapper` is used for JSON serialization of `DeviceEntity` objects.
-The existing `@JsonTypeInfo`/`@JsonAutoDetect` configuration on `DeviceEntity`
-controls the output format — no custom serialization needed.
+**Serialization:**
+- `iot_get_state` — `ObjectMapper` serializes the full `DeviceEntity`
+  subclass. The existing `@JsonTypeInfo`/`@JsonAutoDetect` configuration
+  on `DeviceEntity` controls the output format.
+- `iot_get_devices` — projects each `DeviceEntity` to a `DeviceSummary`
+  record (defined in the `mcp/` module), then serializes the list via
+  `ObjectMapper`. `DeviceSummary` is a simple projection record:
+  `DeviceSummary(String deviceId, String deviceClass, String label,
+  String providerId, String location, boolean available, Instant lastUpdated)`.
+  Constructed from `DeviceEntity` fields — no Jackson polymorphism needed.
 
 **Dispatch timeout:** `iot_send_command` uses `await().atMost(Duration.ofSeconds(30))`
 as a safety net for the MCP thread pool. Providers may complete faster with
@@ -197,14 +214,15 @@ than extracted to a shared service — the routing is 5 lines of
 straightforward lookups, and each consumer has meaningfully different
 surrounding concerns (RBAC, worker API, MCP error handling).
 
-### 5.3 Parameter Parsing
+### 5.3 Parameter Handling
 
-`parameters` argument arrives as a JSON string from the MCP protocol.
-Parsed to `Map<String, Object>` via `ObjectMapper.readValue()`. If parsing
-fails: `"Failed: Invalid parameters JSON: <message>"`.
+`parameters` is declared as `@ToolArg Map<String, Object>` — the Quarkus
+MCP framework deserializes the JSON object natively via
+`FeatureManagerBase.handleParam()` (Jackson `ObjectMapper.convertValue()`).
+No manual parsing or dedicated error path needed.
 
-If `parameters` is null or blank: `Map.of()` (empty map), matching
-`DeviceCommand`'s null-coalescing behavior.
+If `parameters` is null (omitted by the LLM): `Map.of()` (empty map),
+matching `DeviceCommand`'s null-coalescing behavior.
 
 ---
 
@@ -230,9 +248,8 @@ injection, so tests instantiate it directly with `MockDeviceRegistry` and
 | `sendCommandFailsForUnknownDevice` | `"Failed: Device not found: ..."` |
 | `sendCommandFailsForUnknownProvider` | `"Failed: Provider not found: ..."` |
 | `sendCommandHandlesDispatchFailure` | Exception → `"Failed: ..."` |
-| `sendCommandParsesParametersJson` | JSON string → Map in DeviceCommand |
+| `sendCommandPassesParametersMap` | Map argument → DeviceCommand parameters |
 | `sendCommandHandlesNullParameters` | null → empty Map |
-| `sendCommandHandlesInvalidParametersJson` | Parse error → `"Failed: ..."` |
 | `sendCommandReportsNonSentResult` | FAILED/TIMEOUT result reported |
 | `sendCommandTimesOutAfter30Seconds` | Safety timeout returns `"Failed: Command timed out..."` |
 | `getDevicesReturnsErrorForInvalidDeviceClass` | Invalid enum → error with valid values |
