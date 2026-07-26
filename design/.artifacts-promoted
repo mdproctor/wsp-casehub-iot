@@ -1,8 +1,8 @@
-timestamp=2026-07-25T15:45:15.751603+00:00
-branch=issue-384-retire-reactive
-workspace_promoted=14
-project_promoted=0
+timestamp=2026-07-26T15:55:00.058938+00:00
+branch=issue-69-mcp-device-provider-tools
+workspace_promoted=15
+project_promoted=1
 specs_cleaned=0
 issues_closed=1
-blog_published=0
-plans_archived=9
+blog_published=1
+plans_archived=1
