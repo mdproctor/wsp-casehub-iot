@@ -1,6 +1,6 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 8707354 — feat(#78,#79,#75,#76,#68,#66): SPI blocking migration, MCP audit/history, DismissalGangliaObserver, spec sync
+**Head commit (project):** ca69181 — feat(#63): IoTAiResolutionAgent — LLM resolution agent with polling, claim, execution, escalation, and timeout sweep
 
 ---
 
@@ -10,33 +10,30 @@
 
 ## Immediate Next Step
 
-1. #63 (LLM resolution agent — IoTAiResolutionAgent) — **unblocked**, top priority
-2. File ras issue for full Ganglion Uni→blocking migration (detect/compact/close)
+1. File ras issue for full Ganglion Uni→blocking migration (detect/compact/close) — trailing from last session
+2. #74 (RBAC, tenancy filtering for MCP) — blocked on life#60 §8
 3. #46 (evaluate webapp extraction to app tier) — independent
 
-## What Was Done (2026-07-27)
+## What Was Done (2026-07-30)
 
-**Branch:** `issue-78-spi-blocking-and-batch` — closed, landed as `8707354`.
-**Covers:** #78, #79, #75, #76, #68, #66.
+**Branch:** `issue-63-llm-resolution-agent` — closed, landed as `ca69181`.
+**Covers:** #63.
 
-- **#78+#79 SPI blocking migration** — DeviceProvider (discover, dispatch) and
-  DeviceRegistry (refresh) migrated from Uni to blocking. All implementations,
-  REST clients, callers, and tests updated. BridgeDeviceProvider uses
-  CompletableFuture instead of UniEmitter.
-- **#75 MCP audit events** — IoTCommandAuditEvent CDI event fired on every
-  iot_send_command dispatch (success and failure).
-- **#76 MCP device history** — iot_get_history tool with DeviceStateHistoryProvider
-  SPI. JPA implementation in webapp. Optional inject for graceful fallback.
-- **#68 DismissalGangliaObserver** — observes DISMISSED events, closes referenced
-  ganglia. findBySituationId() added to SituationDefinitionRegistry (ras).
-- **#66 Spec sync** — CBR spec §4-5 rewritten: platform-queue → subject view toolkit.
+- **#63 IoTAiResolutionAgent** — LLM agent that claims cases from `iot-ai-resolution`
+  queue view, loads CBR suggestions, calls Claude via engine's langchain4j `Agent`
+  infrastructure, risk-classifies each planned action via `IoTActionRiskClassifier`,
+  executes autonomous actions via `DeviceCommandWorkerFunction`, or escalates to
+  `iot-operator-assisted` with full `AiEscalationContext`.
+- Features: semaphore-bounded concurrent LLM calls, transient vs deterministic
+  retry classification, status guard against timeout sweep races, partial worker
+  failure tracking with stop-on-first-failure escalation.
+- Adversarial design review: 9 rounds, 18 issues, 13 verified fixes.
 
 ## Cross-Repo Changes
 
-- **ras:** RasTriggerPolicy migrated to blocking. findBySituationId() added.
-  Cherry-picked to ras main (5007cc3). Pushed to origin.
-- **ops:** IoTNodeProvisioner caller updated (d8b0615 on ops main). Pushed.
-- casehubio/parent#395 (from prior session) — still open.
+- **engine:** `findByView()` added to `CaseQueueService` (on `issue-810` branch).
+  Stale Uni→blocking references fixed in queue module's `CaseLabelEvaluator` and tests.
+  `casehub-platform-view` + `casehub-platform-view-inmem` added to engine parent BOM.
 
 ## What's Left
 
@@ -46,12 +43,13 @@
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #63 | LLM resolution agent — IoTAiResolutionAgent | L | High | Unblocked, top priority |
 | #74 | RBAC, tenancy filtering, principal propagation for MCP | M | Med | Blocked on life#60 §8 |
 | #77 | WebSocket/SSE streaming state changes via MCP | M | High | Future protocol |
 | #46 | Evaluate webapp extraction to app tier | L | High | Independent |
+| #81 | Queue listing REST endpoints | M | Med | Display queue entries with triage metadata |
+| #82 | Re-routing on context changes / CBR re-evaluation | M | High | Engine PER_EVALUATION support |
 
 ## Key References
 
-- Blog: `blog/2026-07-27-mdp01-six-issues-one-branch.md`
-- Garden: GE-20260727-300281 — IntelliJ MCP truncation on timeout
+- Spec: `specs/issue-63-llm-resolution-agent/2026-07-29-llm-resolution-agent-design.md`
+- Review: `~/adr/casehub-iot/llm-resolution-agent-20260729-235357/tracker.md`
