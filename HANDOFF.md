@@ -11,7 +11,7 @@
 ## Immediate Next Step
 
 1. File ras issue for full Ganglion Uni→blocking migration (detect/compact/close) — trailing from last session
-2. #74 (RBAC, tenancy filtering for MCP) — blocked on life#60 §8
+2. #74 (RBAC, tenancy filtering for MCP) — unblocked (life#60 closed)
 3. #46 (evaluate webapp extraction to app tier) — independent
 
 ## What Was Done (2026-07-30)
@@ -34,6 +34,7 @@
 - **engine:** `findByView()` added to `CaseQueueService` (on `issue-810` branch).
   Stale Uni→blocking references fixed in queue module's `CaseLabelEvaluator` and tests.
   `casehub-platform-view` + `casehub-platform-view-inmem` added to engine parent BOM.
+- **life:** #60 closed — RBAC foundation shipped. Unblocks iot#74.
 
 ## What's Left
 
@@ -43,7 +44,7 @@
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #74 | RBAC, tenancy filtering, principal propagation for MCP | M | Med | Blocked on life#60 §8 |
+| #74 | RBAC, tenancy filtering, principal propagation for MCP | M | Med | Unblocked — life#60 closed |
 | #77 | WebSocket/SSE streaming state changes via MCP | M | High | Future protocol |
 | #46 | Evaluate webapp extraction to app tier | L | High | Independent |
 | #81 | Queue listing REST endpoints | M | Med | Display queue entries with triage metadata |
