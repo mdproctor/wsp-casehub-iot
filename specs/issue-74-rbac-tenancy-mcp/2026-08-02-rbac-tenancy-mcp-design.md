@@ -165,12 +165,16 @@ without one (bridge), the annotations are inert.
 
 **SPI addition:** Add `Optional<DeviceEntity> findById(String deviceId,
 String tenancyId)` to `DeviceRegistry`. Returns the device only if it
-exists and belongs to the given tenant (or has null tenancyId —
-system-wide devices visible to all tenants, matching `DeviceResource`'s
-existing `filterByTenancy` semantic). Returns `Optional.empty()` for
-cross-tenant devices — preserves the "don't leak existence" invariant.
-The existing `findById(String)` remains for non-tenancy contexts
-(bridge).
+exists and its `tenancyId` matches the given tenant. Returns
+`Optional.empty()` for cross-tenant devices — preserves the "don't leak
+existence" invariant. The existing `findById(String)` remains for
+non-tenancy contexts (bridge).
+
+Note: `DeviceEntity`'s constructor enforces
+`Objects.requireNonNull(tenancyId)` — tenancyId is never null.
+No null-tenancy code path is needed. The existing
+`DeviceResource.filterByTenancy()` null check is also dead and will
+be simplified in the same change.
 
 **`iot_get_devices`:** Replace `deviceRegistry.findAll()` with
 `deviceRegistry.findByTenancyId(identityContext.tenancyId())`. Existing
