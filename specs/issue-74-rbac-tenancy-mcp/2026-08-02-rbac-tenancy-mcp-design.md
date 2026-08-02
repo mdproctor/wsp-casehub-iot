@@ -52,45 +52,68 @@ public final class IoTRoles {
 Placed in the API module because host apps need these constants to
 configure their OIDC role mappings.
 
+**ARC42STORIES update:** §2 Constraints currently states
+"Authorization-agnostic: `iot-api` does not enforce authorization."
+This constraint remains true — `IoTRoles` defines vocabulary, not
+enforcement. The constraint will be refined to: "Authorization-agnostic:
+`iot-api` does not enforce authorization; it may define role name
+constants used by consuming modules for annotation-based access control."
+
+**Webapp migration:** `DeviceResource` currently hardcodes
+`@RolesAllowed("iot-viewer")` and `@RolesAllowed("iot-operator")` as
+string literals. These will be updated to `@RolesAllowed(IoTRoles.VIEWER)`
+and `@RolesAllowed(IoTRoles.OPERATOR)` to consolidate role name
+definitions.
+
 ---
 
 ## 4. Principal Resolution
 
-### 4.1 New Injections
+### 4.1 McpIdentityContext
+
+New `@ApplicationScoped` bean in `casehub-iot-mcp` encapsulating
+principal resolution for the dual-host environment. The tool class
+should not know about CDI container lifecycle states — that is
+infrastructure plumbing, not tool behavior.
 
 ```java
-private final Instance<CurrentPrincipal> currentPrincipal;
+@ApplicationScoped
+public class McpIdentityContext {
 
-@ConfigProperty(name = "casehub.iot.tenancy-id")
-String configTenancyId;
+    private final Instance<CurrentPrincipal> currentPrincipal;
+
+    @ConfigProperty(name = "casehub.iot.tenancy-id")
+    String configTenancyId;
+
+    @Inject
+    public McpIdentityContext(Instance<CurrentPrincipal> currentPrincipal) {
+        this.currentPrincipal = currentPrincipal;
+    }
+
+    public String tenancyId() {
+        if (currentPrincipal.isResolvable()
+                && Arc.container() != null
+                && Arc.container().requestContext().isActive()) {
+            return currentPrincipal.get().tenancyId();
+        }
+        return configTenancyId;
+    }
+
+    public String actorId() {
+        if (currentPrincipal.isResolvable()
+                && Arc.container() != null
+                && Arc.container().requestContext().isActive()) {
+            return currentPrincipal.get().actorId();
+        }
+        return "mcp-agent";
+    }
+}
 ```
 
 `Instance<CurrentPrincipal>` (not direct `@Inject`) — defers resolution
 so the bean is optional. Direct injection would cause
 `UnsatisfiedResolutionException` at startup in hosts without a
 `CurrentPrincipal` implementation (bridge).
-
-### 4.2 Helper Methods
-
-```java
-private String resolveTenancyId() {
-    if (currentPrincipal.isResolvable()
-            && Arc.container() != null
-            && Arc.container().requestContext().isActive()) {
-        return currentPrincipal.get().tenancyId();
-    }
-    return configTenancyId;
-}
-
-private String resolveActorId() {
-    if (currentPrincipal.isResolvable()
-            && Arc.container() != null
-            && Arc.container().requestContext().isActive()) {
-        return currentPrincipal.get().actorId();
-    }
-    return "mcp-agent";
-}
-```
 
 Three-guard pattern (validated by GE-20260627-f3476f):
 1. `isResolvable()` — bean exists and is unambiguous
@@ -100,6 +123,17 @@ Three-guard pattern (validated by GE-20260627-f3476f):
 **Fallback behavior (bridge / background contexts):**
 - Tenancy → `casehub.iot.tenancy-id` config property
 - Actor → `"mcp-agent"` literal
+
+### 4.2 Tool Class Injection
+
+The tool class injects `McpIdentityContext` as a single dependency:
+
+```java
+private final McpIdentityContext identityContext;
+```
+
+No CDI introspection in the tool class — principal resolution is fully
+encapsulated in `McpIdentityContext`.
 
 ---
 
@@ -120,22 +154,44 @@ without one (bridge), the annotations are inert.
 
 ### 5.2 Tenancy Filtering
 
-**`iot_get_devices`:** Replace `deviceRegistry.findAll()` with
-`deviceRegistry.findByTenancyId(resolveTenancyId())`. Existing filters
-(deviceClass, providerId, available) chain after.
+**SPI addition:** Add `Optional<DeviceEntity> findById(String deviceId,
+String tenancyId)` to `DeviceRegistry`. Returns the device only if it
+exists and belongs to the given tenant (or has null tenancyId —
+system-wide devices visible to all tenants, matching `DeviceResource`'s
+existing `filterByTenancy` semantic). Returns `Optional.empty()` for
+cross-tenant devices — preserves the "don't leak existence" invariant.
+The existing `findById(String)` remains for non-tenancy contexts
+(bridge).
 
-**`iot_get_state`, `iot_get_history`, `iot_send_command`:** After
-`deviceRegistry.findById(deviceId)`, verify device tenancy:
+**`iot_get_devices`:** Replace `deviceRegistry.findAll()` with
+`deviceRegistry.findByTenancyId(identityContext.tenancyId())`. Existing
+filters (deviceClass, providerId, available) chain after.
+
+**`iot_get_state`, `iot_send_command`:** Replace
+`deviceRegistry.findById(deviceId)` with
+`deviceRegistry.findById(deviceId, identityContext.tenancyId())`.
+Cross-tenant devices return `Optional.empty()` → `"Device not found"`.
+No inline tenancy check needed — the registry enforces it.
+
+**`iot_get_history`:** The current implementation calls
+`historyProviders.get().findHistory(deviceId, ...)` directly — there is
+no `findById()` call to attach a tenancy check to. Add a device lookup
+before the history query:
 
 ```java
-if (!device.tenancyId().equals(resolveTenancyId())) {
+var deviceOpt = deviceRegistry.findById(deviceId, identityContext.tenancyId());
+if (deviceOpt.isEmpty()) {
     return "Device not found: " + deviceId;
 }
 ```
 
-Returns "Device not found" on tenancy mismatch — does not leak that the
-device exists in another tenant. Same error message as a genuinely
-missing device.
+This check goes before the `historyProviders.isResolvable()` guard —
+tenancy rejection should not reveal whether a history provider exists.
+
+The `DeviceStateHistoryProvider` SPI remains tenancy-unaware. The
+device-level guard is sufficient: history entries are scoped by
+deviceId, and the device lookup ensures the deviceId belongs to the
+caller's tenant.
 
 ### 5.3 Actor Identity
 
@@ -145,7 +201,7 @@ In `iot_send_command`, replace:
 ```
 with:
 ```java
-resolveActorId()
+identityContext.actorId()
 ```
 
 The audit event then records the authenticated caller when available.
@@ -159,29 +215,42 @@ Quarkus framework concern tested in host apps.
 
 ### 6.1 New Tests
 
+**McpIdentityContextTest:**
+
 | Test | Verifies |
 |------|----------|
-| `getDevicesFiltersByTenancy` | With principal → uses `findByTenancyId(principal.tenancyId())` |
-| `getDevicesFallsBackToConfigTenancy` | Without principal → uses `findByTenancyId(configTenancyId)` |
+| `tenancyIdReturnsPrincipalTenancy` | With principal → returns `principal.tenancyId()` |
+| `tenancyIdFallsBackToConfig` | Without principal → returns `configTenancyId` |
+| `actorIdReturnsPrincipalActor` | With principal → returns `principal.actorId()` |
+| `actorIdFallsBackToMcpAgent` | Without principal → returns `"mcp-agent"` |
+
+**IoTDeviceMcpToolTest:**
+
+| Test | Verifies |
+|------|----------|
+| `getDevicesFiltersByTenancy` | Uses `findByTenancyId(identityContext.tenancyId())` |
 | `getStateRejectsDeviceFromOtherTenant` | Wrong tenant → `"Device not found"` |
 | `getStateAllowsSameTenantDevice` | Same tenant → returns state |
-| `sendCommandUsesActorIdFromPrincipal` | With principal → `dispatchedBy` = `actorId()` |
-| `sendCommandFallsBackToMcpAgent` | Without principal → `dispatchedBy` = `"mcp-agent"` |
+| `sendCommandUsesActorId` | `dispatchedBy` = `identityContext.actorId()` |
 | `sendCommandRejectsDeviceFromOtherTenant` | Cross-tenant command → `"Device not found"` |
 | `getHistoryRejectsDeviceFromOtherTenant` | Cross-tenant history → `"Device not found"` |
 
 ### 6.2 Test Setup
 
-Constructor-inject a mock `Instance<CurrentPrincipal>`:
-- **With principal:** `isResolvable()` returns true, `get()` returns a stub
-  with fixed tenancyId and actorId
+**McpIdentityContext tests:** Constructor-inject a mock
+`Instance<CurrentPrincipal>`:
+- **With principal:** `isResolvable()` returns true, `get()` returns a
+  stub with fixed tenancyId and actorId
 - **Without principal:** `isResolvable()` returns false
 
 `configTenancyId` set via reflection or package-private access. No CDI
-container needed — `Instance<>` is a mockable interface.
-
-The `Arc.container()` guard returns null in unit tests, so the
+container needed — `Instance<>` is a mockable interface. The
+`Arc.container()` guard returns null in unit tests, so the
 `isResolvable()` check is sufficient — the scope check is never reached.
+
+**Tool class tests:** Mock `McpIdentityContext` — two methods
+(`tenancyId()`, `actorId()`), clear contract. No CDI container
+introspection or `Instance<>` mock construction needed in tool tests.
 
 ---
 
@@ -211,8 +280,15 @@ are stable — no explicit declarations needed.
 | File | Change |
 |------|--------|
 | `api/.../IoTRoles.java` | New — role constants |
-| `mcp/.../IoTDeviceMcpTool.java` | Annotations, principal injection, tenancy filtering, actorId |
-| `mcp/.../IoTDeviceMcpToolTest.java` | 8 new tests |
+| `api/.../spi/DeviceRegistry.java` | Add `findById(String, String)` — tenancy-scoped lookup |
+| `api/.../spi/CdiDeviceRegistry.java` | Implement `findById(String, String)` |
+| `mcp/.../McpIdentityContext.java` | New — principal resolution bean |
+| `mcp/.../McpIdentityContextTest.java` | New — tests for three-guard resolution |
+| `mcp/.../IoTDeviceMcpTool.java` | Annotations, `McpIdentityContext` injection, tenancy filtering, actorId |
+| `mcp/.../IoTDeviceMcpToolTest.java` | 6 new tenancy/identity tests |
+| `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants |
+| `testing/.../MockDeviceRegistry.java` | Implement `findById(String, String)` |
+| `ARC42STORIES.MD` | Refine authorization-agnostic constraint |
 | `mcp/pom.xml` | No changes needed — transitive deps are stable |
 
 ---
