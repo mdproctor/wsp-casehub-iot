@@ -45,6 +45,7 @@ package io.casehub.iot.api;
 public final class IoTRoles {
     public static final String VIEWER = "iot-viewer";
     public static final String OPERATOR = "iot-operator";
+    public static final String ADMIN = "iot-admin";
     private IoTRoles() {}
 }
 ```
@@ -61,9 +62,10 @@ constants used by consuming modules for annotation-based access control."
 
 **Webapp migration:** `DeviceResource` currently hardcodes
 `@RolesAllowed("iot-viewer")` and `@RolesAllowed("iot-operator")` as
-string literals. These will be updated to `@RolesAllowed(IoTRoles.VIEWER)`
-and `@RolesAllowed(IoTRoles.OPERATOR)` to consolidate role name
-definitions.
+string literals. `SituationResource` hardcodes `@RolesAllowed("iot-admin")`
+on three mutation endpoints. All will be updated to use `IoTRoles`
+constants (`IoTRoles.VIEWER`, `IoTRoles.OPERATOR`, `IoTRoles.ADMIN`)
+to consolidate role name definitions.
 
 ---
 
@@ -81,28 +83,31 @@ infrastructure plumbing, not tool behavior.
 public class McpIdentityContext {
 
     private final Instance<CurrentPrincipal> currentPrincipal;
-
-    @ConfigProperty(name = "casehub.iot.tenancy-id")
-    String configTenancyId;
+    private final String configTenancyId;
 
     @Inject
-    public McpIdentityContext(Instance<CurrentPrincipal> currentPrincipal) {
+    public McpIdentityContext(Instance<CurrentPrincipal> currentPrincipal,
+                              @ConfigProperty(name = "casehub.iot.tenancy-id")
+                              String configTenancyId) {
         this.currentPrincipal = currentPrincipal;
+        this.configTenancyId = configTenancyId;
+    }
+
+    boolean isPrincipalAvailable() {
+        return currentPrincipal.isResolvable()
+                && Arc.container() != null
+                && Arc.container().requestContext().isActive();
     }
 
     public String tenancyId() {
-        if (currentPrincipal.isResolvable()
-                && Arc.container() != null
-                && Arc.container().requestContext().isActive()) {
+        if (isPrincipalAvailable()) {
             return currentPrincipal.get().tenancyId();
         }
         return configTenancyId;
     }
 
     public String actorId() {
-        if (currentPrincipal.isResolvable()
-                && Arc.container() != null
-                && Arc.container().requestContext().isActive()) {
+        if (isPrincipalAvailable()) {
             return currentPrincipal.get().actorId();
         }
         return "mcp-agent";
@@ -115,10 +120,14 @@ so the bean is optional. Direct injection would cause
 `UnsatisfiedResolutionException` at startup in hosts without a
 `CurrentPrincipal` implementation (bridge).
 
-Three-guard pattern (validated by GE-20260627-f3476f):
+Three-guard pattern in `isPrincipalAvailable()` (validated by
+GE-20260627-f3476f):
 1. `isResolvable()` — bean exists and is unambiguous
 2. `Arc.container() != null` — CDI container running (fails in unit tests)
 3. `requestContext().isActive()` — request scope live on this thread
+
+`isPrincipalAvailable()` is package-private — test subclasses override
+it to bypass the `Arc.container()` guard (see §6.2).
 
 **Fallback behavior (bridge / background contexts):**
 - Tenancy → `casehub.iot.tenancy-id` config property
@@ -191,7 +200,16 @@ tenancy rejection should not reveal whether a history provider exists.
 The `DeviceStateHistoryProvider` SPI remains tenancy-unaware. The
 device-level guard is sufficient: history entries are scoped by
 deviceId, and the device lookup ensures the deviceId belongs to the
-caller's tenant.
+caller's tenant. The webapp's `DeviceResource.history()` has an
+additional JPA-level tenancy filter (`AND h.tenancyId = :tenancyId`)
+as defense-in-depth — this asymmetry is acceptable because devices
+do not change tenants at runtime.
+
+**Cross-tenant admin:** `CurrentPrincipal.isCrossTenantAdmin()` is not
+consulted. A cross-tenant admin using MCP tools sees only their own
+tenant's devices — consistent with the webapp's `DeviceResource` which
+also uses strict tenancy equality (`filterByTenancy()`). Cross-tenant
+MCP access is deferred to a future issue.
 
 ### 5.3 Actor Identity
 
@@ -234,19 +252,22 @@ Quarkus framework concern tested in host apps.
 | `sendCommandUsesActorId` | `dispatchedBy` = `identityContext.actorId()` |
 | `sendCommandRejectsDeviceFromOtherTenant` | Cross-tenant command → `"Device not found"` |
 | `getHistoryRejectsDeviceFromOtherTenant` | Cross-tenant history → `"Device not found"` |
+| `getHistoryAllowsSameTenantDevice` | Same tenant → returns history entries |
 
 ### 6.2 Test Setup
 
 **McpIdentityContext tests:** Constructor-inject a mock
-`Instance<CurrentPrincipal>`:
-- **With principal:** `isResolvable()` returns true, `get()` returns a
-  stub with fixed tenancyId and actorId
-- **Without principal:** `isResolvable()` returns false
+`Instance<CurrentPrincipal>` and `configTenancyId`:
+- **With principal:** Subclass `McpIdentityContext` and override
+  `isPrincipalAvailable()` to return `true`. Mock
+  `Instance<CurrentPrincipal>` with `isResolvable()` → true, `get()`
+  → stub with fixed tenancyId and actorId.
+- **Without principal:** Construct directly — `Arc.container()` returns
+  null in unit tests, so `isPrincipalAvailable()` naturally returns
+  false and the fallback path is taken.
 
-`configTenancyId` set via reflection or package-private access. No CDI
-container needed — `Instance<>` is a mockable interface. The
-`Arc.container()` guard returns null in unit tests, so the
-`isResolvable()` check is sufficient — the scope check is never reached.
+`isPrincipalAvailable()` is package-private, enabling test subclassing
+without exposing CDI lifecycle internals to the public API.
 
 **Tool class tests:** Mock `McpIdentityContext` — two methods
 (`tenancyId()`, `actorId()`), clear contract. No CDI container
@@ -287,6 +308,7 @@ are stable — no explicit declarations needed.
 | `mcp/.../IoTDeviceMcpTool.java` | Annotations, `McpIdentityContext` injection, tenancy filtering, actorId |
 | `mcp/.../IoTDeviceMcpToolTest.java` | 6 new tenancy/identity tests |
 | `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants |
+| `webapp/.../SituationResource.java` | Migrate `@RolesAllowed("iot-admin")` to `IoTRoles.ADMIN` |
 | `testing/.../MockDeviceRegistry.java` | Implement `findById(String, String)` |
 | `ARC42STORIES.MD` | Refine authorization-agnostic constraint |
 | `mcp/pom.xml` | No changes needed — transitive deps are stable |
@@ -313,5 +335,7 @@ Entries consulted during design:
 - OIDC role mapping configuration in webapp — host app concern
 - MCP transport authentication mechanism — host app concern
 - Audit / ledger integration for tool commands — iot#75
-- Device state history queries via MCP — already shipped in #69
+- Device state history queries via MCP — already shipped in #76
+- Cross-tenant admin access via MCP tools — deferred (webapp also
+  ignores `isCrossTenantAdmin()` in `DeviceResource.filterByTenancy()`)
 - WebSocket/SSE streaming — iot#77
