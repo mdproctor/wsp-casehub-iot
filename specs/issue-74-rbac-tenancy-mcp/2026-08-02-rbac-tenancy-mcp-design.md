@@ -199,6 +199,24 @@ List<HistoryEntry> findHistory(String deviceId, String tenancyId,
                                Instant from, Instant to, int limit);
 ```
 
+**Breaking change.** This modifies the existing SPI method signature in
+`casehub-iot-api`. Unlike the `DeviceRegistry.findById` addition (which
+uses a `default` method that post-filters via `DeviceEntity.tenancyId()`),
+a safe `default` is not possible here — `HistoryEntry` does not carry
+`tenancyId`, so a default that delegates to the old signature cannot
+post-filter and would silently bypass tenancy isolation. A compile-time
+break is preferable to a silent data leak. Only one implementation exists
+(`JpaDeviceStateHistoryProvider` in webapp); no downstream consumers
+implement this SPI. See §9 for API compatibility implications.
+
+**Cross-dimension resolution:** The structure review assumed this SPI
+would remain tenancy-unaware (assumption A2). The coherence and
+robustness reviews independently settled on data-layer enforcement
+for history tenancy. The spec follows the coherence/robustness
+approach — data-layer enforcement is the only mechanism that retains
+access to history for deprovisioned devices no longer in the live
+registry.
+
 Defense-in-depth at the data layer: `JpaDeviceStateHistoryProvider`
 adds `AND h.tenancyId = :tenancyId` to the JPA query. This ensures
 history queries are tenancy-isolated regardless of the calling code
@@ -273,6 +291,15 @@ public record IoTCommandAuditEvent(
     Instant timestamp
 ) {}
 ```
+
+**Breaking change.** Adding `tenancyId` changes the canonical
+constructor of this record. The only construction site is
+`IoTDeviceMcpTool.fireAuditEvent()` within this repo's `mcp` module.
+Downstream consumers (casehub-life) observe this event via CDI
+`@ObservesAsync` — observers receive constructed instances and are
+unaffected by constructor changes. Every audit event must carry
+`tenancyId` explicitly; a factory method defaulting it to null would
+be a data integrity hole. See §9 for API compatibility implications.
 
 The `fireAuditEvent` helper passes `identityContext.tenancyId()`.
 Without this field, correlating commands to tenants requires joining
@@ -355,7 +382,7 @@ context. Unit tests cover guard 1 (`isResolvable`) and the fallback
 path (`Arc.container() == null`). Guards 2 and 3 require `@QuarkusTest`
 with `@TestSecurity` — this is the host app's responsibility.
 
-The webapp should add integration tests validating:
+The webapp **must** add integration tests validating (iot#88):
 - Authenticated request → principal tenancy and actor identity used
 - Unauthenticated/background context → config fallback used
 
@@ -390,7 +417,25 @@ risks data isolation failures in multi-tenant deployments.
 
 ---
 
-## 9. Files Changed
+## 9. API Compatibility
+
+This spec introduces two breaking changes to `casehub-iot-api`:
+
+1. `DeviceStateHistoryProvider.findHistory()` — parameter added (§5.2)
+2. `IoTCommandAuditEvent` — record component added (§5.3)
+
+Per CLAUDE.md semver discipline ("No breaking changes without a major
+version bump"), this requires a major version bump of `casehub-iot-api`.
+Both changes are intentionally breaking — backward-compatible shims
+would introduce silent tenancy bypass (findHistory) or data integrity
+gaps (audit event without tenancyId). The blast radius is contained:
+`findHistory` has one implementation (`JpaDeviceStateHistoryProvider`)
+and one caller (MCP tool); `IoTCommandAuditEvent` has one construction
+site (`IoTDeviceMcpTool.fireAuditEvent()`). Downstream consumers
+observe the audit event via CDI and are unaffected by constructor
+changes.
+
+## 10. Files Changed (summary)
 
 | File | Change |
 |------|--------|
@@ -410,7 +455,7 @@ risks data isolation failures in multi-tenant deployments.
 
 ---
 
-## 10. Garden Context
+## 11. Garden Context
 
 Entries consulted during design:
 
@@ -425,17 +470,17 @@ Entries consulted during design:
 
 ---
 
-## 11. Not In Scope
+## 12. Not In Scope
 
 - OIDC role mapping configuration in webapp — host app concern
 - MCP transport authentication mechanism — host app concern
 - Audit / ledger integration for tool commands — iot#75
 - Device state history queries via MCP — already shipped in #76
-- Cross-tenant admin access via MCP tools — deferred (webapp also
+- Cross-tenant admin access via MCP tools — iot#86 (webapp also
   ignores `isCrossTenantAdmin()` in `DeviceResource.filterByTenancy()`)
-- `DeviceResource.history()` deprovisioned device regression — same
-  issue as R1-03 (registry pre-check blocks deprovisioned device
-  history access via REST). Refactoring to use
-  `DeviceStateHistoryProvider.findHistory()` is a separate concern —
-  file as follow-up issue citing the settled R1-03 decision.
+- `DeviceResource.history()` deprovisioned device regression — iot#87
+  (registry pre-check blocks deprovisioned device history access
+  via REST; refactor to use tenancy-aware `findHistory()` directly)
 - WebSocket/SSE streaming — iot#77
+- Webapp integration tests for McpIdentityContext three-guard
+  pattern — iot#88
