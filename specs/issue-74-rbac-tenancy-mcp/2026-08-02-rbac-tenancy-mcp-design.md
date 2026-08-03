@@ -165,12 +165,25 @@ without one (bridge), the annotations are inert.
 
 ### 5.2 Tenancy Filtering
 
-**SPI addition:** Add `Optional<DeviceEntity> findById(String deviceId,
-String tenancyId)` to `DeviceRegistry`. Returns the device only if it
-exists and its `tenancyId` matches the given tenant. Returns
-`Optional.empty()` for cross-tenant devices — preserves the "don't leak
-existence" invariant. The existing `findById(String)` remains for
-non-tenancy contexts (bridge).
+**SPI addition:** Add `findById(String deviceId, String tenancyId)` to
+`DeviceRegistry` as a `default` method:
+
+```java
+default Optional<DeviceEntity> findById(String deviceId, String tenancyId) {
+    return findById(deviceId).filter(d -> d.tenancyId().equals(tenancyId));
+}
+```
+
+Returns the device only if it exists and its `tenancyId` matches the
+given tenant. Returns `Optional.empty()` for cross-tenant devices —
+preserves the "don't leak existence" invariant. The existing
+`findById(String)` remains for non-tenancy contexts (bridge).
+
+The `default` provides correct tenancy filtering for all existing and
+future `DeviceRegistry` implementations without requiring overrides.
+Three implementations exist (`CdiDeviceRegistry`, `MockDeviceRegistry`,
+`BridgeCloudClientTest.EmptyRegistry`) — all inherit correct behavior
+automatically.
 
 Note: `DeviceEntity`'s constructor enforces
 `Objects.requireNonNull(tenancyId)` — tenancyId is never null.
@@ -385,15 +398,13 @@ risks data isolation failures in multi-tenant deployments.
 | `api/.../spi/DeviceRegistry.java` | Add `findById(String, String)` — tenancy-scoped lookup |
 | `api/.../spi/DeviceStateHistoryProvider.java` | Add `tenancyId` parameter to `findHistory()` |
 | `api/.../IoTCommandAuditEvent.java` | Add `tenancyId` field |
-| `api/.../spi/CdiDeviceRegistry.java` | Implement `findById(String, String)` |
 | `mcp/.../McpIdentityContext.java` | New — principal resolution bean |
 | `mcp/.../McpIdentityContextTest.java` | New — tests for three-guard resolution |
 | `mcp/.../IoTDeviceMcpTool.java` | Annotations, `McpIdentityContext` injection, tenancy filtering, actorId |
 | `mcp/.../IoTDeviceMcpToolTest.java` | Adapt existing setUp(); 8 new tenancy/identity/robustness tests |
 | `webapp/.../JpaDeviceStateHistoryProvider.java` | Add `AND h.tenancyId = :tenancyId` to query |
-| `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants; simplify `filterByTenancy()` dead null check |
+| `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants; simplify `filterByTenancy()` dead null check; fix `dispatch()` `dispatchedBy` from `tenancyId()` to `actorId()` |
 | `webapp/.../SituationResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants |
-| `testing/.../MockDeviceRegistry.java` | Implement `findById(String, String)` |
 | `ARC42STORIES.MD` | Refine authorization-agnostic constraint |
 | `mcp/pom.xml` | No changes needed — transitive deps are stable |
 
@@ -422,4 +433,9 @@ Entries consulted during design:
 - Device state history queries via MCP — already shipped in #76
 - Cross-tenant admin access via MCP tools — deferred (webapp also
   ignores `isCrossTenantAdmin()` in `DeviceResource.filterByTenancy()`)
+- `DeviceResource.history()` deprovisioned device regression — same
+  issue as R1-03 (registry pre-check blocks deprovisioned device
+  history access via REST). Refactoring to use
+  `DeviceStateHistoryProvider.findHistory()` is a separate concern —
+  file as follow-up issue citing the settled R1-03 decision.
 - WebSocket/SSE streaming — iot#77
