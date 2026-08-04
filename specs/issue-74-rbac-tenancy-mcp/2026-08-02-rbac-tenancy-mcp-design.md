@@ -62,8 +62,10 @@ constants used by consuming modules for annotation-based access control."
 
 **Webapp migration:** `DeviceResource` currently hardcodes
 `@RolesAllowed("iot-viewer")` and `@RolesAllowed("iot-operator")` as
-string literals. `SituationResource` hardcodes `@RolesAllowed("iot-admin")`
-on three mutation endpoints. All will be updated to use `IoTRoles`
+string literals. `SituationResource` hardcodes `@RolesAllowed` on six
+endpoints — three `"iot-admin"` (`createDefinition`, `updateDefinition`,
+`deleteDefinition`) and three `"iot-viewer"` (`listDefinitions`,
+`getSuggestions`, `listActive`). All will be updated to use `IoTRoles`
 constants (`IoTRoles.VIEWER`, `IoTRoles.OPERATOR`, `IoTRoles.ADMIN`)
 to consolidate role name definitions.
 
@@ -163,18 +165,64 @@ without one (bridge), the annotations are inert.
 
 ### 5.2 Tenancy Filtering
 
-**SPI addition:** Add `Optional<DeviceEntity> findById(String deviceId,
-String tenancyId)` to `DeviceRegistry`. Returns the device only if it
-exists and its `tenancyId` matches the given tenant. Returns
-`Optional.empty()` for cross-tenant devices — preserves the "don't leak
-existence" invariant. The existing `findById(String)` remains for
-non-tenancy contexts (bridge).
+**SPI addition:** Add `findById(String deviceId, String tenancyId)` to
+`DeviceRegistry` as a `default` method:
+
+```java
+default Optional<DeviceEntity> findById(String deviceId, String tenancyId) {
+    return findById(deviceId).filter(d -> d.tenancyId().equals(tenancyId));
+}
+```
+
+Returns the device only if it exists and its `tenancyId` matches the
+given tenant. Returns `Optional.empty()` for cross-tenant devices —
+preserves the "don't leak existence" invariant. The existing
+`findById(String)` remains for non-tenancy contexts (bridge).
+
+The `default` provides correct tenancy filtering for all existing and
+future `DeviceRegistry` implementations without requiring overrides.
+Three implementations exist (`CdiDeviceRegistry`, `MockDeviceRegistry`,
+`BridgeCloudClientTest.EmptyRegistry`) — all inherit correct behavior
+automatically.
 
 Note: `DeviceEntity`'s constructor enforces
 `Objects.requireNonNull(tenancyId)` — tenancyId is never null.
 No null-tenancy code path is needed. The existing
 `DeviceResource.filterByTenancy()` null check is also dead and will
 be simplified in the same change.
+
+**SPI change:** Add `tenancyId` parameter to
+`DeviceStateHistoryProvider.findHistory()`:
+
+```java
+List<HistoryEntry> findHistory(String deviceId, String tenancyId,
+                               Instant from, Instant to, int limit);
+```
+
+**Breaking change.** This modifies the existing SPI method signature in
+`casehub-iot-api`. Unlike the `DeviceRegistry.findById` addition (which
+uses a `default` method that post-filters via `DeviceEntity.tenancyId()`),
+a safe `default` is not possible here — `HistoryEntry` does not carry
+`tenancyId`, so a default that delegates to the old signature cannot
+post-filter and would silently bypass tenancy isolation. A compile-time
+break is preferable to a silent data leak. Only one implementation exists
+(`JpaDeviceStateHistoryProvider` in webapp); no downstream consumers
+implement this SPI. See §9 for API compatibility implications.
+
+**Cross-dimension resolution:** The structure review assumed this SPI
+would remain tenancy-unaware (assumption A2). The coherence and
+robustness reviews independently settled on data-layer enforcement
+for history tenancy. The spec follows the coherence/robustness
+approach — data-layer enforcement is the only mechanism that retains
+access to history for deprovisioned devices no longer in the live
+registry.
+
+Defense-in-depth at the data layer: `JpaDeviceStateHistoryProvider`
+adds `AND h.tenancyId = :tenancyId` to the JPA query. This ensures
+history queries are tenancy-isolated regardless of the calling code
+path, and retains access to history for deprovisioned devices (the
+history table has `tenancy_id` on every row; the live registry is
+not consulted).
 
 **`iot_get_devices`:** Replace `deviceRegistry.findAll()` with
 `deviceRegistry.findByTenancyId(identityContext.tenancyId())`. Existing
@@ -187,27 +235,26 @@ Cross-tenant devices return `Optional.empty()` → `"Device not found"`.
 No inline tenancy check needed — the registry enforces it.
 
 **`iot_get_history`:** The current implementation calls
-`historyProviders.get().findHistory(deviceId, ...)` directly — there is
-no `findById()` call to attach a tenancy check to. Add a device lookup
-before the history query:
+`historyProviders.get().findHistory(deviceId, ...)` directly — no
+`findById()` call exists. Rather than adding a device registry
+pre-check (which would block access to history for deprovisioned
+devices no longer in the live registry), tenancy is enforced at the
+data layer: pass `identityContext.tenancyId()` to the tenancy-aware
+`findHistory()`.
+
+Add `DateTimeParseException` handling for the `from` and `to`
+parameters (pre-existing unhandled exception):
 
 ```java
-var deviceOpt = deviceRegistry.findById(deviceId, identityContext.tenancyId());
-if (deviceOpt.isEmpty()) {
-    return "Device not found: " + deviceId;
+Instant fromInstant;
+Instant toInstant;
+try {
+    fromInstant = from != null ? Instant.parse(from) : null;
+    toInstant = to != null ? Instant.parse(to) : null;
+} catch (DateTimeParseException e) {
+    return "Failed: Invalid date format. Use ISO-8601 (e.g. '2026-07-01T00:00:00Z').";
 }
 ```
-
-This check goes before the `historyProviders.isResolvable()` guard —
-tenancy rejection should not reveal whether a history provider exists.
-
-The `DeviceStateHistoryProvider` SPI remains tenancy-unaware. The
-device-level guard is sufficient: history entries are scoped by
-deviceId, and the device lookup ensures the deviceId belongs to the
-caller's tenant. The webapp's `DeviceResource.history()` has an
-additional JPA-level tenancy filter (`AND h.tenancyId = :tenancyId`)
-as defense-in-depth — this asymmetry is acceptable because devices
-do not change tenants at runtime.
 
 **Cross-tenant admin:** `CurrentPrincipal.isCrossTenantAdmin()` is not
 consulted. A cross-tenant admin using MCP tools sees only their own
@@ -228,12 +275,61 @@ identityContext.actorId()
 
 The audit event then records the authenticated caller when available.
 
+**Audit event tenancy:** Add `tenancyId` field to
+`IoTCommandAuditEvent` for multi-tenant audit compliance:
+
+```java
+public record IoTCommandAuditEvent(
+    String deviceId,
+    String action,
+    Map<String, Object> parameters,
+    CommandResult result,
+    String dispatchedBy,
+    String correlationId,
+    String providerId,
+    String tenancyId,
+    Instant timestamp
+) {}
+```
+
+**Breaking change.** Adding `tenancyId` changes the canonical
+constructor of this record. The only construction site is
+`IoTDeviceMcpTool.fireAuditEvent()` within this repo's `mcp` module.
+Downstream consumers (casehub-life) observe this event via CDI
+`@ObservesAsync` — observers receive constructed instances and are
+unaffected by constructor changes. Every audit event must carry
+`tenancyId` explicitly; a factory method defaulting it to null would
+be a data integrity hole. See §9 for API compatibility implications.
+
+The `fireAuditEvent` helper passes `identityContext.tenancyId()`.
+Without this field, correlating commands to tenants requires joining
+through the volatile device registry — which may not contain the
+device at audit query time after deprovisioning or registry refresh.
+
 ---
 
 ## 6. Testing
 
 Unit tests only — no `@QuarkusTest`. `@RolesAllowed` enforcement is a
 Quarkus framework concern tested in host apps.
+
+### 6.0 Test Migration
+
+The `IoTDeviceMcpTool` constructor gains a `McpIdentityContext`
+parameter. All existing tests update their `setUp()` to pass a mock:
+
+```java
+var identityContext = mock(McpIdentityContext.class);
+when(identityContext.tenancyId()).thenReturn("default-tenant");
+when(identityContext.actorId()).thenReturn("mcp-agent");
+tool = new IoTDeviceMcpTool(registry, providers, MAPPER,
+                             auditEvents, historyProviders, identityContext);
+```
+
+Existing tests continue to exercise the same code paths — the mock
+returns the same values as the fallback behavior (config tenancy +
+`"mcp-agent"` literal). Constructor injection is used, matching the
+existing pattern in the tool class.
 
 ### 6.1 New Tests
 
@@ -255,8 +351,9 @@ Quarkus framework concern tested in host apps.
 | `getStateAllowsSameTenantDevice` | Same tenant → returns state |
 | `sendCommandUsesActorId` | `dispatchedBy` = `identityContext.actorId()` |
 | `sendCommandRejectsDeviceFromOtherTenant` | Cross-tenant command → `"Device not found"` |
-| `getHistoryRejectsDeviceFromOtherTenant` | Cross-tenant history → `"Device not found"` |
+| `getHistoryRejectsDeviceFromOtherTenant` | Cross-tenant history → no entries returned |
 | `getHistoryAllowsSameTenantDevice` | Same tenant → returns history entries |
+| `getHistoryRejectsInvalidDateFormat` | Malformed `from`/`to` → `"Failed: Invalid date format..."` |
 
 ### 6.2 Test Setup
 
@@ -276,6 +373,18 @@ without exposing CDI lifecycle internals to the public API.
 **Tool class tests:** Mock `McpIdentityContext` — two methods
 (`tenancyId()`, `actorId()`), clear contract. No CDI container
 introspection or `Instance<>` mock construction needed in tool tests.
+
+### 6.3 Host-App Integration Tests
+
+The three-guard pattern in `McpIdentityContext.isPrincipalAvailable()`
+is fully exercised only in a CDI container with an active request
+context. Unit tests cover guard 1 (`isResolvable`) and the fallback
+path (`Arc.container() == null`). Guards 2 and 3 require `@QuarkusTest`
+with `@TestSecurity` — this is the host app's responsibility.
+
+The webapp **must** add integration tests validating (iot#88):
+- Authenticated request → principal tenancy and actor identity used
+- Unauthenticated/background context → config fallback used
 
 ---
 
@@ -298,28 +407,55 @@ are stable — no explicit declarations needed.
 | Webapp | OIDC + casehub-work (`TenantScopedPrincipal`) | Full RBAC + tenancy. Must map OIDC groups → `iot-viewer` / `iot-operator`. |
 | Bridge | None | `@RolesAllowed` inert. `Instance<CurrentPrincipal>` unresolvable. Falls back to config tenancy + `"mcp-agent"`. **Zero changes.** |
 
+**Deployment requirement:** Any host app including `casehub-iot-mcp`
+must set `casehub.iot.tenancy-id` in its configuration. This is a
+mandatory property — omitting it causes `ConfigurationException` at
+startup. Both existing hosts already set this property (bridge:
+`"default"`, webapp: `"default-tenant"`). A default value is
+intentionally not provided: silent fallback on a tenancy property
+risks data isolation failures in multi-tenant deployments.
+
 ---
 
-## 9. Files Changed
+## 9. API Compatibility
+
+This spec introduces two breaking changes to `casehub-iot-api`:
+
+1. `DeviceStateHistoryProvider.findHistory()` — parameter added (§5.2)
+2. `IoTCommandAuditEvent` — record component added (§5.3)
+
+Per CLAUDE.md semver discipline ("No breaking changes without a major
+version bump"), this requires a major version bump of `casehub-iot-api`.
+Both changes are intentionally breaking — backward-compatible shims
+would introduce silent tenancy bypass (findHistory) or data integrity
+gaps (audit event without tenancyId). The blast radius is contained:
+`findHistory` has one implementation (`JpaDeviceStateHistoryProvider`)
+and one caller (MCP tool); `IoTCommandAuditEvent` has one construction
+site (`IoTDeviceMcpTool.fireAuditEvent()`). Downstream consumers
+observe the audit event via CDI and are unaffected by constructor
+changes.
+
+## 10. Files Changed (summary)
 
 | File | Change |
 |------|--------|
 | `api/.../IoTRoles.java` | New — role constants |
 | `api/.../spi/DeviceRegistry.java` | Add `findById(String, String)` — tenancy-scoped lookup |
-| `api/.../spi/CdiDeviceRegistry.java` | Implement `findById(String, String)` |
+| `api/.../spi/DeviceStateHistoryProvider.java` | Add `tenancyId` parameter to `findHistory()` |
+| `api/.../IoTCommandAuditEvent.java` | Add `tenancyId` field |
 | `mcp/.../McpIdentityContext.java` | New — principal resolution bean |
 | `mcp/.../McpIdentityContextTest.java` | New — tests for three-guard resolution |
 | `mcp/.../IoTDeviceMcpTool.java` | Annotations, `McpIdentityContext` injection, tenancy filtering, actorId |
-| `mcp/.../IoTDeviceMcpToolTest.java` | 6 new tenancy/identity tests |
-| `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants |
-| `webapp/.../SituationResource.java` | Migrate `@RolesAllowed("iot-admin")` to `IoTRoles.ADMIN` |
-| `testing/.../MockDeviceRegistry.java` | Implement `findById(String, String)` |
+| `mcp/.../IoTDeviceMcpToolTest.java` | Adapt existing setUp(); 8 new tenancy/identity/robustness tests |
+| `webapp/.../JpaDeviceStateHistoryProvider.java` | Add `AND h.tenancyId = :tenancyId` to query |
+| `webapp/.../DeviceResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants; simplify `filterByTenancy()` dead null check; fix `dispatch()` `dispatchedBy` from `tenancyId()` to `actorId()` |
+| `webapp/.../SituationResource.java` | Migrate `@RolesAllowed` string literals to `IoTRoles` constants |
 | `ARC42STORIES.MD` | Refine authorization-agnostic constraint |
 | `mcp/pom.xml` | No changes needed — transitive deps are stable |
 
 ---
 
-## 10. Garden Context
+## 11. Garden Context
 
 Entries consulted during design:
 
@@ -334,12 +470,17 @@ Entries consulted during design:
 
 ---
 
-## 11. Not In Scope
+## 12. Not In Scope
 
 - OIDC role mapping configuration in webapp — host app concern
 - MCP transport authentication mechanism — host app concern
 - Audit / ledger integration for tool commands — iot#75
 - Device state history queries via MCP — already shipped in #76
-- Cross-tenant admin access via MCP tools — deferred (webapp also
+- Cross-tenant admin access via MCP tools — iot#86 (webapp also
   ignores `isCrossTenantAdmin()` in `DeviceResource.filterByTenancy()`)
+- `DeviceResource.history()` deprovisioned device regression — iot#87
+  (registry pre-check blocks deprovisioned device history access
+  via REST; refactor to use tenancy-aware `findHistory()` directly)
 - WebSocket/SSE streaming — iot#77
+- Webapp integration tests for McpIdentityContext three-guard
+  pattern — iot#88
