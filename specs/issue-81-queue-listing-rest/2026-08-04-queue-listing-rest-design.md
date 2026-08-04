@@ -96,15 +96,19 @@ record QueueEntryDetail(
     QueueEntrySummary entry,
     Map<String, Object> workingContext,
     List<ResolutionSuggestion> suggestions,
-    AiResolutionPlan resolutionPlan,
     AiEscalationContext escalationContext,
     List<ExecutedActionResult> executionResults
 )
 ```
 
+`AiResolutionPlan` is not stored in the case context — it's ephemeral within
+`IoTAiResolutionAgent.processEntry()`. For escalated cases,
+`AiEscalationContext.partialPlan` captures the planned actions. For successful
+cases, `executionResults` (from `aiResolutionResults` context key) shows what
+was executed. No separate plan field needed.
+
 Reuses existing records from `webapp-api`: `ResolutionSuggestion`,
-`AiResolutionPlan`, `AiEscalationContext`, `ExecutedActionResult`.
-No new data types needed.
+`AiEscalationContext`, `ExecutedActionResult`. No new data types needed.
 
 ---
 
@@ -139,7 +143,8 @@ of viewId → viewName for resolving null viewName on escalated entries.
    `getCbrConfig()` → `extractFeatures(workingContext)` →
    `IoTCbrRetrievalService.retrieve(cbrConfig, features, tenancyId)`.
    If cbrConfig is null → empty suggestions list
-4. Read `aiResolutionResults` and `aiEscalationContext` from case context
+4. Read `aiResolutionResults` (as `List<ExecutedActionResult>`) and
+   `aiEscalationContext` (as `AiEscalationContext`) from case context
 5. Resolve viewName from cached mapping
 6. Return `QueueEntryDetail`
 
