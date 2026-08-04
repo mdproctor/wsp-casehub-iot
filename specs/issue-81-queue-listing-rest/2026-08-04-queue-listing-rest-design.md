@@ -23,10 +23,15 @@ GET  /api/resolution/queue/{entryId}  → full triage detail for one entry
 
 ### Query filters (list)
 
-| Parameter | Type   | Default | Values |
-|-----------|--------|---------|--------|
-| `view`    | String | both    | `ai-resolution`, `operator-assisted` |
-| `status`  | String | all     | `PENDING`, `CLAIMED` |
+| Parameter | Type   | Default          | Values |
+|-----------|--------|------------------|--------|
+| `view`    | String | both             | `ai-resolution`, `operator-assisted` |
+| `status`  | String | `PENDING,CLAIMED` | `PENDING`, `CLAIMED`, `REVOKED` |
+
+Default excludes REVOKED entries (resolved cases). Explicit `?status=REVOKED`
+can be passed to see them. When `?status=PENDING` is passed, the implementation
+uses `CaseQueueService.findPending(viewId, tenancyId)` directly instead of
+filtering in-memory.
 
 ### Security
 
@@ -73,10 +78,16 @@ record QueueEntrySummary(
 Enough for the list view to show: "Thermostat in Living Room — CLAIMED
 by iot-ai-agent 30s ago" without loading CBR or AI state.
 
-Device/situation fields are extracted from the case's working context
+All case-derived fields (`caseType`, `deviceId`, `deviceClass`, `roomType`,
+`situationId`) are extracted from the case's working context
 (`CaseInstance.getCaseContext().getOrDefault("working", Map.of())`).
-Null when the case is no longer in the cache (edge case — active cases
-are architecturally guaranteed to be cached).
+All are null when the case is no longer in the cache. Active cases are
+architecturally guaranteed to be cached; null covers the narrow race
+where a case completes between the queue query and the cache lookup.
+
+`viewName` resolution: `CaseQueueService.escalate()` sets `viewName = null`
+on the target entry. The resource resolves viewName from the cached view ID
+→ name mapping (built from `SubjectViewStore.findByTenancy()` at startup).
 
 ### QueueEntryDetail (detail)
 
@@ -103,24 +114,34 @@ No new data types needed.
 
 Same pattern as `IoTAiResolutionAgent.init()`: resolve view IDs from
 `SubjectViewStore.findByTenancy()` at `@PostConstruct`. Cache
-`aiResolutionViewId` and `operatorAssistedViewId`.
+`aiResolutionViewId`, `operatorAssistedViewId`, and a `Map<UUID, String>`
+of viewId → viewName for resolving null viewName on escalated entries.
 
 ### List endpoint flow
 
 1. Determine which view(s) to query based on `?view` filter (default: both)
-2. `CaseQueueService.findByView(viewId, tenancyId)` per view
-3. Optional status filter applied in-memory
-4. For each entry: `CaseInstanceCache.get(caseId)` → extract device/situation
-   identity from working context
-5. Return `List<QueueEntrySummary>`
+2. Per view:
+   - If `?status=PENDING`: use `CaseQueueService.findPending(viewId, tenancyId)`
+   - Otherwise: use `CaseQueueService.findByView(viewId, tenancyId)`
+3. Filter: exclude REVOKED unless explicitly requested; apply status filter
+4. For each entry: `CaseInstanceCache.get(caseId)` → snapshot working context
+   once; extract device/situation identity from that snapshot
+5. Resolve viewName from cached viewId → name mapping when entry's viewName is null
+6. Return `List<QueueEntrySummary>`
 
 ### Detail endpoint flow
 
-1. Query both views via `CaseQueueService.findByView()`, find entry by ID
-2. `CaseInstanceCache.get(caseId)` → full working context
-3. Load CBR suggestions via `IoTCbrRetrievalService.retrieve()`
+1. `CaseQueueEntryStore.findById(entryId)` → verify
+   `entry.getTenancyId().equals(principal.tenancyId())`; 404 if not found
+   or tenancy mismatch
+2. `CaseInstanceCache.get(caseId)` → snapshot working context once
+3. CBR suggestions: `CaseDefinitionRegistry.findByName(caseType)` →
+   `getCbrConfig()` → `extractFeatures(workingContext)` →
+   `IoTCbrRetrievalService.retrieve(cbrConfig, features, tenancyId)`.
+   If cbrConfig is null → empty suggestions list
 4. Read `aiResolutionResults` and `aiEscalationContext` from case context
-5. Return `QueueEntryDetail`
+5. Resolve viewName from cached mapping
+6. Return `QueueEntryDetail`
 
 ### Dependencies (all already available in webapp)
 
@@ -133,8 +154,11 @@ Same pattern as `IoTAiResolutionAgent.init()`: resolve view IDs from
 @Inject CurrentPrincipal principal;
 ```
 
-No new engine modifications required. All services used by the existing
-`IoTAiResolutionAgent` and `CaseResource`.
+The detail endpoint also needs `CaseQueueEntryStore` (the SPI behind
+`CaseQueueService`) for `findById()`. This is already a CDI bean in
+the webapp runtime.
+
+No other engine modifications required.
 
 ---
 
@@ -143,10 +167,13 @@ No new engine modifications required. All services used by the existing
 | Scenario | Behaviour |
 |----------|-----------|
 | View not configured at startup | Endpoint returns empty list (view ID is null) |
-| Case not in cache | Entry in list with null device/situation fields |
+| Case not in cache | All case-derived fields null (caseType, device*, situationId) |
 | Entry not found (detail) | 404 |
+| Tenancy mismatch (detail) | 404 (same as not found — no information leak) |
 | No AI state yet (PENDING entry) | `resolutionPlan`, `escalationContext`, `executionResults` are null |
 | Escalated entry | `previousViewName` populated, `escalationContext` present |
+| viewName null on entry | Resolved from cached viewId → name mapping |
+| REVOKED entries | Excluded by default; visible with explicit `?status=REVOKED` |
 
 ### Performance — cache lookup per entry
 
@@ -156,10 +183,14 @@ concurrent LLM calls) — under LLM outage or agent-disabled conditions,
 queue depth grows with case arrival rate. But even at hundreds of entries,
 total cache lookup time is sub-millisecond. JSON serialization dominates.
 
-Data availability is architecturally guaranteed: cases in the queue are
-active (unresolved), and active cases remain in the cache. The null
-fallback covers the narrow race where a case completes between the queue
-query and the cache lookup.
+### Concurrency — reads during AI agent processing
+
+The REST endpoint reads `CaseInstance` while `IoTAiResolutionAgent` may
+concurrently write context keys (`aiResolutionResults`, `aiEscalationContext`).
+`CaseContext` uses `ConcurrentHashMap` — individual reads are atomic. The
+endpoint snapshots the working context once per entry and uses that snapshot
+for both display fields and CBR feature extraction. Stale reads between
+requests are acceptable for a dashboard view.
 
 ---
 
@@ -171,15 +202,18 @@ query and the cache lookup.
 |---|------|----------|
 | 1 | List — both views combined | Entries from both views returned with correct viewName |
 | 2 | List — view filter | `?view=ai-resolution` returns only AI queue entries |
-| 3 | List — status filter | `?status=PENDING` excludes CLAIMED entries |
+| 3 | List — status filter | `?status=PENDING` excludes CLAIMED; default excludes REVOKED |
 | 4 | List — enrichment | Each entry carries deviceId, deviceClass, roomType, situationId |
-| 5 | List — case not in cache | Entry returned with null device/situation fields |
+| 5 | List — case not in cache | Entry returned with null case-derived fields |
 | 6 | List — view not configured | Empty list, no error |
-| 7 | Detail — happy path | Full enrichment: CBR suggestions, AI plan, escalation context, results |
-| 8 | Detail — entry not found | 404 |
-| 9 | Detail — no AI state | PENDING entry with null resolution/escalation fields |
-| 10 | Detail — escalated entry | escalationContext populated, previousViewName set |
-| 11 | Security | Unauthenticated → 401; wrong role → 403 |
+| 7 | List — viewName null (escalated) | viewName resolved from cached mapping |
+| 8 | Detail — happy path | Full enrichment: CBR suggestions, AI plan, escalation context, results |
+| 9 | Detail — entry not found | 404 |
+| 10 | Detail — tenancy mismatch | 404 (no information leak) |
+| 11 | Detail — no AI state | PENDING entry with null resolution/escalation fields |
+| 12 | Detail — no CBR config | Empty suggestions list |
+| 13 | Detail — escalated entry | escalationContext populated, previousViewName set |
+| 14 | Security | Unauthenticated → 401; wrong role → 403 |
 
 ### Not tested here
 
@@ -194,7 +228,9 @@ operations (covered by engine's `CaseQueueServiceTest`).
 **In scope:**
 - `ResolutionQueueResource` with list and detail endpoints
 - `QueueEntrySummary` and `QueueEntryDetail` response records
-- View resolution, tenancy filtering, query parameters
+- View resolution (including null viewName on escalated entries)
+- Tenancy filtering with explicit verification on detail endpoint
+- REVOKED status handling (excluded by default)
 - Tests for all paths
 
 **Out of scope:**
@@ -202,3 +238,25 @@ operations (covered by engine's `CaseQueueServiceTest`).
 - SSE/WebSocket streaming of queue changes (#77)
 - Agent metrics/observability (#85)
 - TypeScript page consuming these endpoints (separate issue)
+- Pagination (defer until production scale warrants it)
+- Shared view resolution helper (refactor — both this resource and
+  `IoTAiResolutionAgent` resolve views the same way)
+
+---
+
+## §8 Review Resolutions
+
+Design review (light, 2026-08-04) — issues resolved:
+
+| # | Issue | Resolution |
+|---|-------|------------|
+| 1 | REVOKED status ignored | Default filter excludes REVOKED; explicit `?status=REVOKED` available |
+| 2 | viewName null after escalation | Resolve from cached viewId → name mapping |
+| 3 | Detail O(N) scan | Use `CaseQueueEntryStore.findById()` + tenancy verification |
+| 4 | No pagination | Deferred — queue depth is bounded by active case volume |
+| 5 | CBR retrieval underspecified | Full chain specified: definition → cbrConfig → features → retrieve |
+| 6 | caseType also nullable | All case-derived fields documented as nullable |
+| 7 | Concurrent reads | Snapshot once per entry; ConcurrentHashMap guarantees atomic reads |
+| 8 | Response record placement | Keep in `resolution` package — domain data, not generic REST DTOs |
+| 9 | Duplicated view resolution | Deferred — refactor, not required for this issue |
+| 10 | Use `findPending()` directly | Accepted — use when `?status=PENDING` |
