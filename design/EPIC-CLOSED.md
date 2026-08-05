@@ -1,5 +1,5 @@
-# Branch Closed: issue-384-retire-reactive
+# Branch Closed: issue-81-queue-listing-rest
 
-**Date:** 2026-07-25
-**Issues:** 73
+**Date:** 2026-08-05
+**Issues:** 81
 **Status:** merged to main
