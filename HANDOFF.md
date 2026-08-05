@@ -1,13 +1,13 @@
 # Handoff — casehub-iot
 
-**Head commit (project):** 2e2c916 — feat(#74): RBAC, tenancy filtering, and principal propagation for MCP tools
-**Date:** 2026-08-04
+**Head commit (project):** b8192b9 — feat(#81): queue listing REST endpoints for AI resolution views
+**Date:** 2026-08-05
 
 ---
 
 ## Immediate Next Step
 
-Pick up #81 (queue listing REST endpoints) — next on the critical path. Run `/work` to begin.
+Pick up #85 (agent metrics & observability) — next on the critical path. Run `/work` to begin.
 
 ## Delivery Epics
 
@@ -29,8 +29,8 @@ Pick up #81 (queue listing REST endpoints) — next on the critical path. Run `/
 
 | # | Description | Scale | Complexity | Status | Seq |
 |---|-------------|-------|------------|--------|-----|
-| #81 | Queue listing REST endpoints | M | Med | **Next** | 4 |
-| #85 | Agent metrics & observability | M | Med | Ready | 5 |
+| #81 | Queue listing REST endpoints | M | Med | **Done** — landed as b8192b9 | ~~4~~ |
+| #85 | Agent metrics & observability | M | Med | **Next** | 5 |
 | #83 | Multi-turn LLM conversation | L | High | After #85 | 7 |
 | #84 | Model fine-tuning & prompt versioning | M | Med | Parked — future | — |
 
@@ -46,7 +46,7 @@ Pick up #81 (queue listing REST endpoints) — next on the critical path. Run `/
 
 ```
 #74 → #60 → #61 → #81 → #85 → #82 → #83
- ✅     ✅     ✅     C      C      B      C
+ ✅     ✅     ✅     ✅     C      B      C
 ```
 
 **Parked:** #77 (MCP protocol), #42 (production scale), #84 (future)
@@ -56,14 +56,17 @@ Pick up #81 (queue listing REST endpoints) — next on the critical path. Run `/
 **Blocking** (we owe):
 - engine#834 — Ganglion Uni→blocking migration · M · Med
 
-## What Was Done (2026-08-04)
+## What Was Done (2026-08-05)
 
-**Branch:** `issue-60-cbr-recency-surfacing` — closed (issues only, no code changes).
-**Covers:** #60, #61.
+**Branch:** `issue-81-queue-listing-rest` — closed, landed as b8192b9.
 
-- Both features were already implemented on main under earlier branches (commits `357928e` for #60 and `2b57e1b` for #61, referencing original spec issue numbers #64, #65)
-- Closed #60 and #61 to formalise issue tracking
-- Recovered 4 orphaned specs from closed branches to workspace main
+- `GET /api/resolution/queue` — list entries across `iot-ai-resolution` and `iot-operator-assisted` views, enriched with device context
+- `GET /api/resolution/queue/{entryId}` — detail with CBR suggestions and escalation context
+- `QueueEntrySummary` and `QueueEntryDetail` response records in webapp-api
+- Design review caught: viewName null after escalation, REVOKED exclusion, O(N) detail scan → findById
+- Self-review caught: `AiResolutionPlan` is ephemeral (never stored in context) — removed from detail response
+- Fixed pre-existing PlanTrace and CbrRetentionPolicy constructor mismatches
+- Consumer guide updated with new endpoint documentation
 
 ## What's Left
 
