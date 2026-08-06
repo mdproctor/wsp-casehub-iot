@@ -1,5 +1,5 @@
-# Branch Closed: issue-384-retire-reactive
+# Branch Closed: issue-85-agent-metrics-observability
 
-**Date:** 2026-07-25
-**Issues:** 73
+**Date:** 2026-08-06
+**Issues:** 85
 **Status:** merged to main
