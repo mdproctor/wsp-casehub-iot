@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-111-simulation-runtime
-state: scaffolded
+state: active
 project-sha: 22b93bfa649a4862e99d122e91253791ad83ba84
 date: 2026-09-21
 issue-repo: casehubio/iot
@@ -12,6 +12,6 @@ design-section-hashes: 4d2cc5ab:## §1 Introduction and Goals|4f6b26ef:## §2 Co
 flyway-next-v: none
 
 ## Queue
-- [ ] casehubio/iot#111 — Issue #111 ← active
-- [ ] casehubio/iot#112 — Pages scenario integration
+- [x] casehubio/iot#111 — Issue #111
+- [ ] casehubio/iot#112 — Pages scenario integration ← active
 - [ ] casehubio/iot#113 — Seed SimulationCorpus for DeviceProvider

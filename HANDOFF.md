@@ -6,33 +6,36 @@
 
 ## What's Done
 
-The IoT simulation framework is delivered (#110):
-- `@SimulationEligible(name = "device-provider")` on `DeviceProvider` — APT generates decorator
-- `IoTSimulationBeans` — `TemporalDriverFactory<StateChangeEvent>` CDI producer wired to `Event<StateChangeEvent>.fireAsync()` + `SimulationRuntime`
-- 4 temporal profiles in YAML: morning-routine, emergency, quiet-night, full-demo (composite via sequence refs)
-- Scenario YAML stub: `webapp/src/main/resources/scenarios/morning-routine.yaml`
+**#111 — REST endpoint for simulation control (complete):**
+- `DefaultIoTSimulationApi` `@McpDomain("iot/simulation")` — tri-channel REST/GraphQL/MCP surface
+  - `start(profile, speed)` — resolves temporal profile, creates driver, fires `StateChangeEvent` via CDI
+  - `stop()`, `setSpeed(speed)`, `status()`, `profiles()`
+- `SimulationPayloadConverter` — converts `Map<String, Object>` temporal profile payloads to `StateChangeEvent` for PRESENCE_SENSOR, LIGHT, THERMOSTAT, SENSOR device classes
+- Dependencies: `simulation-core`, `simulation-config-core`, `simulation-config` (runtime) added to webapp
+- Jandex `index-dependency` for `simulation-config` CDI bean discovery
+- `casehub.simulation.config=classpath:simulation/temporal-profiles.yaml` in application.properties
+- 15 unit tests (7 converter, 8 API) — all green. Full webapp suite: 90 tests, 0 failures
 
-Platform dependencies delivered:
-- platform#371 — `TemporalSimulationDriver`, `TimedSequence`, `TemporalProfile`, `TemporalProfileRegistry`, `TemporalDriverFactory`
-- platform#372 — `TemporalDriverService @McpDomain` control API (start/stop/speed via scenario steps)
+**Pre-existing fixes (landed on this branch):**
+- Adapted to upstream neocortex CBR renames: `CbrCaseMemoryStore` → `CbrRecordStore`, `FeatureVectorCbrCase` → `CbrFeatureRecord`, `ScoredCbrCase` → `CbrMatch`, `CbrCase` → `CbrRecord`, `CbrFeatureSchema` → `CbrRecordSchema`
+- Added `@HandWrittenEndpoint` to `DeviceSseResource`, `KpiResource`, `WorkItemResource`
 
 ## Queue
 
-3 issues in order:
+3 issues, position 1/3:
 
-1. **#111** (S/Med) — Wire temporal profiles to webapp REST endpoint. Add `POST /api/simulation/start?profile=morning-routine&speed=10` that injects `TemporalProfileRegistry` + `TemporalDriverFactory<StateChangeEvent>`, resolves the named profile, starts the driver. KPI cards, MCP resources, and RAS situation detection light up with simulated activity. **Console becomes demo-ready.**
+1. ~~**#111**~~ (S/Med) — REST endpoint for simulation control. **Done.**
 
-2. **#112** (M/Med) — Pages scenario integration. Complete the `morning-routine.yaml` scenario stub with `delivery: 'graphql'` steps calling `TemporalDriverService` to start profiles, `delivery: 'aria'` steps for UI verification (spotlight KPI cards, assert situations). Create additional scenario files (emergency, full-demo). Wire scenario loading in the webapp. **End-to-end guided demos.** Depends on platform#372 (delivered).
+2. **#112** (M/Med) — Pages scenario integration. Complete `morning-routine.yaml` scenario stub with `delivery: 'graphql'` steps calling `TemporalDriverService` to start profiles, `delivery: 'aria'` steps for UI verification. Create additional scenario files (emergency, full-demo). Wire scenario loading in the webapp. **Next up.**
 
-3. **#113** (S/Low) — Seed `SimulationCorpus` for `DeviceProvider` APT decorator. Create `IoTCorpusSeed` loading `standard-home.yaml` fixtures into corpus so `discover()` and `dispatch()` resolve from simulation in integration tests. Replace hand-rolled `MockDeviceProvider` usage. **Platform simulation pattern for test infrastructure.**
+3. **#113** (S/Low) — Seed `SimulationCorpus` for `DeviceProvider` APT decorator.
 
 ## Key Context
 
-- Temporal profiles fire `StateChangeEvent` directly (domain-typed path) OR `CloudEvent` (platform pipeline path). Both are available. Decision D3 from the spec chose dual factories.
-- `TemporalProfileRegistry.resolve("morning-routine", StateChangeEvent.class, mapper)` does typed conversion from `Map<String, Object>` to domain types in one call.
-- Profile composition via `sequence: [{ ref: morning-routine }, { ref: emergency }]` — no code needed for composite scenarios.
-- `simulation-starter` is the transitive dependency that pulls in everything needed.
-- Platform `TemporalDriverService @McpDomain` (platform#372) provides start/stop/speed as `delivery: 'graphql'` scenario steps — the control plane for Pages scenarios.
+- `DefaultIoTSimulationApi` manages a single active `TemporalSimulationDriver<Map<String, Object>>` — the event sink converts map payloads to `StateChangeEvent` and fires via CDI `fireAsync()`. This triggers `StateChangeHistoryObserver` (JPA persistence), `DeviceSseResource` (SSE push), and `IoTStateChangeResourceObserver` (MCP resource updates).
+- The `SimulationPayloadConverter` builds synthetic `DeviceEntity` subclasses from the simplified YAML payloads. `before` is null; `changedCapabilities` is all capability keys from the device.
+- Platform `SimulationConfigBeans` auto-discovers `simulation/temporal-profiles.yaml` via `casehub.simulation.config` property and produces `TemporalProfileRegistry` + `SimulationRuntime` CDI beans.
+- Profile composition via `sequence: [{ ref: morning-routine }, { ref: emergency }]` — the `full-demo` profile chains all others.
 
 ## Platform Dependencies
 
@@ -45,6 +48,5 @@ mvn --batch-mode -f /path/to/platform/pom.xml install -DskipTests -q -o
 
 | # | Title | Scale | Complexity | Blocked by |
 |---|-------|-------|------------|------------|
-| 111 | REST endpoint for simulation control | S | Med | — |
 | 112 | Pages scenario integration | M | Med | — (platform#372 delivered) |
 | 113 | Corpus seeding for DeviceProvider | S | Low | — |
