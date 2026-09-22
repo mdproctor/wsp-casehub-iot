@@ -13,5 +13,5 @@ flyway-next-v: none
 
 ## Queue
 - [x] casehubio/iot#111 — Issue #111
-- [ ] casehubio/iot#112 — Pages scenario integration ← active
-- [ ] casehubio/iot#113 — Seed SimulationCorpus for DeviceProvider
+- [x] casehubio/iot#112 — Pages scenario integration
+- [ ] casehubio/iot#113 — Seed SimulationCorpus for DeviceProvider ← active
