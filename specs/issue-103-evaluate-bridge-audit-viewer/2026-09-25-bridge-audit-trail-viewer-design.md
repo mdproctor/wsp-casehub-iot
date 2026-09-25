@@ -54,21 +54,17 @@ export function auditPage() {
           lookup: lookup("audit", sortBy("timestamp", "DESCENDING")),
         }))],
         ["Trail", hostPanel("event-trail", {
-          endpoint: "/api/bridge/audit",
+          endpoint: "/api/bridge/audit?limit=500",
           recordsPath: "records",
-          chipField: "eventType",
-          chipValues: [
-            "STATE_CHANGE", "COMMAND_SENT", "COMMAND_RESPONSE",
-            "STATE_SNAPSHOT", "PROVIDER_STATUS_CHANGE",
-            "AGENT_CONNECTED", "AGENT_DISCONNECTED",
-            "REPLAYED_STATE_CHANGE",
+          columnDefs: [
+            { id: "eventType", label: "Event", getValue: (r: any) => r.eventType },
+            { id: "deviceId", label: "Device", getValue: (r: any) => r.deviceId },
+            { id: "correlationId", label: "Correlation", getValue: (r: any) => r.correlationId },
+            { id: "occurredAt", label: "Time", getValue: (r: any) => r.occurredAt },
           ],
-          entityField: "deviceId",
-          entityLabel: "Device",
-          showDateRange: true,
           csvExport: true,
           getRowDetail: renderAuditDetail,
-          getRowKey: (row) => `${row.get("occurredAt")}-${row.get("eventType")}`,
+          getRowKey: (row) => `${row.get("occurredAt")}-${row.get("eventType")}-${row.get("deviceId") ?? "system"}`,
         })],
       ),
     ),
@@ -78,16 +74,21 @@ export function auditPage() {
 
 ### Shared filter architecture
 
-The page-level filter bar (selectors + date pickers) sits above the tabs. The Table tab's `table()` listens to the `"audit"` filter group via `filter: { listening: true, group: "audit" }` — this uses the existing DSL dataset pipeline.
+The page-level filter bar (selectors + date pickers) sits above the tabs. Both tabs share the same filter state via different synchronisation mechanisms.
 
-The Trail tab uses `pages-event-trail`'s own built-in filter bar (chips for eventType, entity selector for deviceId, date range). These two filter systems are independent — the DSL filter group and PagesEventTrail's `FilterState` are different models.
+**Table tab:** Listens to the `"audit"` filter group via `filter: { listening: true, group: "audit" }` — standard DSL dataset pipeline.
 
-**Synchronisation approach:** The page-level filters above the tabs are the primary filter controls. When a page-level filter changes (e.g. deviceId selector), a lightweight adapter propagates the value to the Trail tab. Two implementation options exist (to be resolved during planning):
+**Trail tab:** A page-level filter adapter translates filter group changes into server-side query parameters via URL parameter injection. When any page-level selector or date picker changes:
 
-1. **URL parameter injection** — reconstruct the Trail's endpoint URL with current page-level filter params and call `syncEndpoint()`. PagesEventTrail's `resolveEndpoint()` already appends date params; extending it for eventType/deviceId is a small upstream addition.
-2. **Data property binding** — the Table tab's dataset pipeline fetches filtered data; pass the same filtered records to the Trail via the `data` property (which `configure()` handles), bypassing the Trail's own endpoint fetch.
+1. Read current `eventType`, `deviceId`, `dateFrom`, `dateTo` from the filter group state
+2. Construct the Trail's endpoint URL: `/api/bridge/audit?limit=500` with non-null filter values appended as query params (`&eventType=STATE_CHANGE&deviceId=sw-1&from=...&to=...`)
+3. Update the Trail panel's endpoint and call `syncEndpoint()` to trigger a re-fetch with the new URL
 
-Option 1 is preferred — each tab manages its own lifecycle, and the Trail's built-in chip/entity filters provide additional refinement within the shared scope. The upstream work is small (extend `resolveEndpoint()` to honour chip/entity filter state from configure).
+The `getBridgeAudit` REST endpoint already accepts `eventType`, `deviceId`, `from`, and `to` query params — this is server-side filtering, no new endpoint logic needed. PagesEventTrail's `resolveEndpoint()` preserves existing query params when appending date range.
+
+**No duplicate filter UI:** The Trail's built-in chip bar, entity selector, and date range picker are not configured (`chipField`, `entityField`, `showDateRange` omitted from hostPanel config). The page-level selectors are the sole filter controls for both tabs. This eliminates the confusing duplicate filter bars where page-level and Trail-level filters compete.
+
+**Adapter implementation:** The filter adapter is page-level TypeScript code (~15 lines) that listens for filter group changes and updates the Trail panel's endpoint via DOM access. No additional upstream changes beyond the three listed are required — the adapter constructs the full URL page-side.
 
 ## Upstream changes — casehub-pages
 
@@ -147,45 +148,86 @@ if (props.csvExport !== undefined) this.csvExport = props.csvExport as boolean;
 
 ### TypeScript type model
 
-A TypeScript module defines discriminated union types mirroring the Java sealed interface. This enables compile-time exhaustiveness checking on `switch` statements.
+A TypeScript module defines discriminated union types derived from the actual Java sealed interface and Jackson serialization output. Each `BridgeMessage` variant carries `tenancyId` and `timestamp` (from the sealed interface contract) plus variant-specific fields. The `@type` discriminator follows Jackson's `@JsonTypeInfo(property = "@type")` convention.
+
+`DeviceEntity` is polymorphic — Jackson serializes it with a `@deviceType` discriminator and all instance fields (base + subclass-specific). The TypeScript model uses an index signature for type-specific fields (brightness, temperature, etc.) which the renderer accesses dynamically via `changedCapabilities`.
 
 ```typescript
 // types/bridge-audit.ts
 
+interface DeviceEntity {
+  "@deviceType": string;
+  deviceId: string;
+  deviceClass: string;
+  label: string;
+  available: boolean;
+  lastUpdated: string;
+  tenancyId: string;
+  providerId: string;
+  location: string | null;
+  [key: string]: unknown;
+}
+
+interface StateChangeEvent {
+  before: DeviceEntity | null;
+  after: DeviceEntity;
+  changedCapabilities: string[];
+  occurredAt: string;
+  providerId: string;
+}
+
 interface StateChangePayload {
   "@type": "STATE_CHANGE";
-  event: { deviceId: string; property: string; oldValue: unknown; newValue: unknown; timestamp: string };
+  tenancyId: string;
+  timestamp: string;
+  event: StateChangeEvent;
 }
 
 interface ReplayedStateChangePayload {
   "@type": "REPLAYED_STATE_CHANGE";
-  event: { deviceId: string; property: string; oldValue: unknown; newValue: unknown; timestamp: string };
+  tenancyId: string;
+  timestamp: string;
+  event: StateChangeEvent;
 }
 
 interface StateSnapshotPayload {
   "@type": "STATE_SNAPSHOT";
-  devices: Array<{ deviceId: string; deviceClass: string; available: boolean }>;
+  tenancyId: string;
+  timestamp: string;
+  devices: DeviceEntity[];
 }
 
 interface ProviderStatusPayload {
   "@type": "PROVIDER_STATUS";
-  status: { providerId: string; state: string; message?: string };
+  tenancyId: string;
+  timestamp: string;
+  status: {
+    providerId: string;
+    previousStatus: "CONNECTED" | "CONNECTING" | "DISCONNECTED";
+    currentStatus: "CONNECTED" | "CONNECTING" | "DISCONNECTED";
+  };
 }
 
 interface CommandPayload {
   "@type": "COMMAND";
+  tenancyId: string;
+  timestamp: string;
   correlationId: string;
-  command: { deviceId: string; action: string; parameters?: Record<string, unknown> };
+  command: {
+    targetDeviceId: string;
+    action: string;
+    parameters: Record<string, unknown>;
+    dispatchedBy: string;
+    correlationId: string;
+  };
 }
 
 interface CommandResponsePayload {
   "@type": "COMMAND_RESULT";
+  tenancyId: string;
+  timestamp: string;
   correlationId: string;
-  result: { success: boolean; message?: string; error?: string };
-}
-
-interface HeartbeatPayload {
-  "@type": "HEARTBEAT";
+  result: "SENT" | "FAILED" | "TIMEOUT";
 }
 
 type BridgeMessagePayload =
@@ -194,8 +236,7 @@ type BridgeMessagePayload =
   | StateSnapshotPayload
   | ProviderStatusPayload
   | CommandPayload
-  | CommandResponsePayload
-  | HeartbeatPayload;
+  | CommandResponsePayload;
 
 type BridgeAuditEventType =
   | "STATE_CHANGE"
@@ -241,16 +282,16 @@ function renderAuditDetail(row: TypedRow): TemplateResult | undefined {
 
 | eventType | payload | Rendering |
 |-----------|---------|-----------|
-| STATE_CHANGE | StateChangePayload | Device ID, property name, old → new value, timestamp |
+| STATE_CHANGE | StateChangePayload | Device label + ID from `event.after`, capability diff table: `event.before[cap] → event.after[cap]` for each `cap` in `event.changedCapabilities` |
 | REPLAYED_STATE_CHANGE | ReplayedStateChangePayload | Same as STATE_CHANGE with "Replayed" badge |
-| STATE_SNAPSHOT | StateSnapshotPayload | Device count, list of devices with class and availability |
-| PROVIDER_STATUS_CHANGE | ProviderStatusPayload | Provider ID, state, message |
-| COMMAND_SENT | CommandPayload | Target device, action, parameters table |
-| COMMAND_RESPONSE | CommandResponsePayload | Success/failure badge, message or error |
+| STATE_SNAPSHOT | StateSnapshotPayload | Device count, compact list showing `@deviceType`, `deviceId`, `label`, `available` per device |
+| PROVIDER_STATUS_CHANGE | ProviderStatusPayload | Provider ID, `status.previousStatus → status.currentStatus` with transition badges |
+| COMMAND_SENT | CommandPayload | `command.targetDeviceId`, `command.action`, parameters key-value table, `command.dispatchedBy` |
+| COMMAND_RESPONSE | CommandResponsePayload | Result badge: SENT (green), FAILED (red), TIMEOUT (amber) |
 | AGENT_CONNECTED | null | "Bridge agent connected" with timestamp |
 | AGENT_DISCONNECTED | null | "Bridge agent disconnected" with timestamp |
 
-StateChange and ReplayedStateChange share a renderer, differing only in a badge.
+StateChange and ReplayedStateChange share a renderer, differing only in a badge. The capability diff renderer uses `changedCapabilities` to identify which type-specific fields changed, then reads the before/after values from the polymorphic `DeviceEntity` objects via dynamic property access.
 
 ## Correlation display
 
@@ -268,7 +309,45 @@ Typical correlation groups are 2-4 events:
 
 The "Related Events" section renders each sibling as a compact row: timestamp, eventType badge, and a one-line summary extracted from the payload. The current row is highlighted to orient the operator within the chain.
 
-The fetch is triggered on expand (not pre-loaded) and cached client-side per correlationId until the audit page is unmounted, avoiding re-fetching on collapse/re-expand.
+### Async pattern for correlation fetch
+
+The `getRowDetail` callback is synchronous (`(row: TypedRow) => TemplateResult | undefined`). Correlation data requires an async fetch. This is handled via Lit's `until()` directive, which renders a fallback while the Promise is in-flight and re-renders with the resolved value automatically — no explicit re-render trigger needed.
+
+```typescript
+import { until } from 'lit/directives/until.js';
+
+function renderCorrelation(correlationId: string): TemplateResult {
+  const promise = fetchCorrelation(correlationId)
+    .then(events => html`
+      <div class="related-events">
+        <h4>Related Events</h4>
+        ${events.map(renderRelatedRow)}
+      </div>
+    `)
+    .catch(() => html`<span class="error">Failed to load related events</span>`);
+
+  return html`${until(promise, html`<span class="loading">Loading related events...</span>`)}`;
+}
+```
+
+**Caching:** A module-scope `Map<string, Promise<AuditRecord[]>>` caches the fetch Promise per correlationId. Subsequent expand/collapse/re-expand of the same correlation group returns the cached Promise without re-fetching. The cache persists until page navigation (audit events are historical — no invalidation needed within a page session).
+
+```typescript
+const correlationCache = new Map<string, Promise<AuditRecord[]>>();
+
+function fetchCorrelation(correlationId: string): Promise<AuditRecord[]> {
+  if (!correlationCache.has(correlationId)) {
+    correlationCache.set(correlationId,
+      fetch(`/api/bridge/audit?correlationId=${correlationId}`)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+        .then(body => body.records)
+    );
+  }
+  return correlationCache.get(correlationId)!;
+}
+```
+
+**States:** Loading (until fallback shown), success (related events rendered), error (error message shown via `.catch()`).
 
 ## Component registration
 
@@ -357,15 +436,20 @@ Trail tab → expand row → correlationId != null
 - Upstream pages-event-trail fixes (configure, recordsPath, csvExport)
 
 **Out of scope:**
-- Pagination for the Trail view — PagesEventTrail loads up to the endpoint's limit (100 default, 500 max). Adequate for current scale; pagination support is a separate upstream enhancement if needed at production volume.
+- Pagination for the Trail view — the Trail endpoint is configured with `limit=500` (the maximum). At typical bridge event rates this covers a meaningful time window. Pagination support is a separate upstream enhancement if needed at production volume.
+- `totalCount` fix — `DefaultIoTOperationsApi.getBridgeAudit` returns `events.size()` (page size) as `totalCount`, not the actual total count of matching records. This is a backend bug that prevents "Showing X of Y" display and future pagination. Fix requires either a `count()` method on `BridgeAuditStore` or a wrapper result type from `query()`. Filed as a separate issue — does not block this spec since no UI element depends on `totalCount`.
 - Severity filtering — `BridgeAuditEvent` has no severity field; this was a hypothetical trigger in #103 that doesn't map to the data model.
 - Real-time SSE streaming for the Trail view — the Table tab already has this via the dataset pipeline; adding it to PagesEventTrail is a separate enhancement.
 
 ## Implementation phases
 
+### Phase 0: Upstream issue filing (spec deliverable)
+
+File issue against casehub-pages documenting the three upstream fixes as cross-repo dependencies. This is a spec deliverable, not deferred to implementation — the issue documents the contract and enables planning.
+
 ### Phase 1: Upstream fixes (casehub-pages)
 
-File issue against casehub-pages. Implement the three targeted fixes to `pages-event-trail.ts`:
+Implement the three targeted fixes to `pages-event-trail.ts`:
 1. configure() property passthrough (getRowDetail, getRowKey, columnRenderers)
 2. recordsPath for wrapped responses
 3. csvExport passthrough
@@ -401,8 +485,12 @@ Publish SNAPSHOT. Update IoT webapp's pages dependency.
 - `api/src/main/java/io/casehub/iot/api/bridge/BridgeAuditEvent.java` — record with @Nullable BridgeMessage
 - `api/src/main/java/io/casehub/iot/api/bridge/BridgeAuditEventType.java` — 8 event types (2 null-message)
 - `api/src/main/java/io/casehub/iot/api/bridge/BridgeAuditQuery.java` — query with correlationId support
+- `api/src/main/java/io/casehub/iot/api/bridge/BridgeAuditStore.java` — SPI interface (implemented: JPA, in-memory, no-op)
+- `bridge-persistence-jpa/` — `JpaBridgeAuditStore` production implementation
+- `bridge-persistence-memory/` — `InMemoryBridgeAuditStore` for testing
 - `webapp/src/main/java/io/casehub/iot/webapp/app/service/DefaultIoTOperationsApi.java:94` — getBridgeAudit REST endpoint
 - `webapp-api/src/main/java/io/casehub/iot/webapp/view/AuditTrailView.java` — response shape { records, totalCount, offset, limit }
+- #35 — BridgeAuditStore SPI (CLOSED — fully implemented; ARC42STORIES §8 reference is stale and should be updated)
 - #95 D1 — rationale for keeping DSL table over blocks-audit-trail-viewer
 - #95 D2 — hostPanel() integration pattern validation
 - Review R1-02 — configure() does not deliver getRowDetail/getRowKey/columnRenderers
