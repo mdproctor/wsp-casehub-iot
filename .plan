@@ -13,3 +13,12 @@ flyway-next-v: unknown
 
 ## Queue
 - [ ] casehubio/iot#103 — Issue #103 ← active
+  - [ ] Batch 1: Upstream fixes
+    - [ ] Task 1: Harden pages-event-trail
+  - [ ] Batch 2: Types and renderers
+    - [ ] Task 2: TypeScript type model
+    - [ ] Task 3: Payload renderers
+  - [ ] Batch 3: Tab-toggled page
+    - [ ] Task 4: Component registration + audit refactor + filter adapter
+  - [ ] Batch 4: Correlation
+    - [ ] Task 5: Correlation fetch cache and render
