@@ -78,11 +78,16 @@ export function auditPage() {
 
 ### Shared filter architecture
 
-The page-level filter bar (selectors + date pickers) operates on the `"audit"` filter group. The Table tab's `table()` already listens to this group via `filter: { listening: true, group: "audit" }`.
+The page-level filter bar (selectors + date pickers) sits above the tabs. The Table tab's `table()` listens to the `"audit"` filter group via `filter: { listening: true, group: "audit" }` — this uses the existing DSL dataset pipeline.
 
-For the Trail tab, `pages-event-trail` uses its own built-in filter bar (chips, entity selector, date range) rather than the DSL filter group. The shared filter state is achieved by passing the active filter values as URL parameters to the Trail's endpoint. When page-level filters change, the Trail's endpoint URL is reconstructed with the current filter params, and `pages-event-trail` refetches.
+The Trail tab uses `pages-event-trail`'s own built-in filter bar (chips for eventType, entity selector for deviceId, date range). These two filter systems are independent — the DSL filter group and PagesEventTrail's `FilterState` are different models.
 
-The Trail's built-in chip and entity filters provide additional refinement within the shared scope — an operator can filter to deviceId=X at page level, then further refine by eventType chips in the Trail view.
+**Synchronisation approach:** The page-level filters above the tabs are the primary filter controls. When a page-level filter changes (e.g. deviceId selector), a lightweight adapter propagates the value to the Trail tab. Two implementation options exist (to be resolved during planning):
+
+1. **URL parameter injection** — reconstruct the Trail's endpoint URL with current page-level filter params and call `syncEndpoint()`. PagesEventTrail's `resolveEndpoint()` already appends date params; extending it for eventType/deviceId is a small upstream addition.
+2. **Data property binding** — the Table tab's dataset pipeline fetches filtered data; pass the same filtered records to the Trail via the `data` property (which `configure()` handles), bypassing the Trail's own endpoint fetch.
+
+Option 1 is preferred — each tab manages its own lifecycle, and the Trail's built-in chip/entity filters provide additional refinement within the shared scope. The upstream work is small (extend `resolveEndpoint()` to honour chip/entity filter state from configure).
 
 ## Upstream changes — casehub-pages
 
@@ -263,7 +268,7 @@ Typical correlation groups are 2-4 events:
 
 The "Related Events" section renders each sibling as a compact row: timestamp, eventType badge, and a one-line summary extracted from the payload. The current row is highlighted to orient the operator within the chain.
 
-The fetch is triggered on expand (not pre-loaded) and cached client-side per correlationId for the duration of the page session to avoid re-fetching on collapse/re-expand.
+The fetch is triggered on expand (not pre-loaded) and cached client-side per correlationId until the audit page is unmounted, avoiding re-fetching on collapse/re-expand.
 
 ## Component registration
 
