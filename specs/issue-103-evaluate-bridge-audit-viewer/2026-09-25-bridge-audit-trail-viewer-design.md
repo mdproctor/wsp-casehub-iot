@@ -57,14 +57,14 @@ export function auditPage() {
           endpoint: "/api/bridge/audit?limit=500",
           recordsPath: "records",
           columnDefs: [
-            { id: "eventType", label: "Event", getValue: (r: any) => r.eventType },
-            { id: "deviceId", label: "Device", getValue: (r: any) => r.deviceId },
-            { id: "correlationId", label: "Correlation", getValue: (r: any) => r.correlationId },
-            { id: "occurredAt", label: "Time", getValue: (r: any) => r.occurredAt },
+            { id: "eventType", name: "Event", type: ColumnType.LABEL, getValue: (r: any) => r.eventType },
+            { id: "deviceId", name: "Device", type: ColumnType.TEXT, getValue: (r: any) => r.deviceId },
+            { id: "correlationId", name: "Correlation", type: ColumnType.TEXT, getValue: (r: any) => r.correlationId },
+            { id: "occurredAt", name: "Time", type: ColumnType.DATE, getValue: (r: any) => r.occurredAt },
           ],
           csvExport: true,
           getRowDetail: renderAuditDetail,
-          getRowKey: (row) => `${row.get("occurredAt")}-${row.get("eventType")}-${row.get("deviceId") ?? "system"}`,
+          getRowKey: auditRowKey,
         })],
       ),
     ),
@@ -88,11 +88,15 @@ The `getBridgeAudit` REST endpoint already accepts `eventType`, `deviceId`, `fro
 
 **No duplicate filter UI:** The Trail's built-in chip bar, entity selector, and date range picker are not configured (`chipField`, `entityField`, `showDateRange` omitted from hostPanel config). The page-level selectors are the sole filter controls for both tabs. This eliminates the confusing duplicate filter bars where page-level and Trail-level filters compete.
 
-**Adapter implementation:** The filter adapter is page-level TypeScript code (~15 lines) that listens for filter group changes and updates the Trail panel's endpoint via DOM access. No additional upstream changes beyond the three listed are required — the adapter constructs the full URL page-side.
+**Adapter implementation:** The filter adapter is page-level TypeScript code (~20 lines) that:
+1. **On filter group change:** reads current filter values, constructs the endpoint URL, and calls `syncEndpoint()` on the Trail panel via DOM access.
+2. **On Trail tab activation:** applies current filter state immediately (initial sync). If the operator sets filters in Table tab before switching to Trail, the adapter runs on first Trail activation — not just on subsequent filter changes — ensuring the Trail loads with the correct filter params from the start.
+
+No additional upstream changes beyond the four listed are required — the adapter constructs the full URL page-side.
 
 ## Upstream changes — casehub-pages
 
-Three targeted fixes to `pages-event-trail.ts` in `pages-ui-components`. These harden the component for all `hostPanel()` consumers, not just IoT.
+Four targeted fixes to `pages-event-trail.ts` in `pages-ui-components`. These harden the component for all `hostPanel()` consumers, not just IoT.
 
 ### 1. configure() property passthrough (~3 lines)
 
@@ -143,6 +147,36 @@ The internal `pages-table` does not receive `csvExport`. Add:
 // In configure():
 if (props.csvExport !== undefined) this.csvExport = props.csvExport as boolean;
 ```
+
+### 4. Raw entry pass-through for getRowDetail (~15 lines)
+
+The `pages-data` pipeline converts raw entries to `TypedRow` via `fromRows()`. `TypedRow` cells support only scalar `CellValue` types (TEXT, NUMBER, DATE, LABEL, NULL) — complex objects like `BridgeMessage` are destroyed (converted to `"[object Object]"` via `String()`). Detail renderers that need access to the raw entry (nested payloads, polymorphic objects) cannot retrieve them from `TypedRow`.
+
+Fix: `pages-event-trail` maintains a `WeakMap<TypedRow, unknown>` mapping each `TypedRow` to its corresponding raw entry. The map is built during `_applyFilters()` using index correspondence (the `i`-th row in the filtered `TypedDataSet` corresponds to the `i`-th element in the filtered raw entries array). The `getRowDetail` callback is wrapped before being passed to `pages-table` to inject the raw entry as an optional second parameter.
+
+```typescript
+// pages-event-trail.ts additions
+@state() private _rawEntryByRow = new WeakMap<TypedRow, unknown>();
+
+// In _applyFilters(), after building _filteredDataSet:
+this._rawEntryByRow = new WeakMap();
+for (let i = 0; i < this._filteredDataSet.rows.length; i++) {
+  const row = this._filteredDataSet.rows[i];
+  if (row) this._rawEntryByRow.set(row, filtered[i]);
+}
+
+// In render(), wrap getRowDetail:
+const wrappedDetail = this.getRowDetail
+  ? (row: TypedRow) => this.getRowDetail!(row, this._rawEntryByRow.get(row))
+  : undefined;
+// ... then on pages-table:
+.getRowDetail=${wrappedDetail}
+
+// Updated property type (non-breaking — second param optional):
+@property({ type: Object }) getRowDetail?: (row: TypedRow, rawEntry?: unknown) => TemplateResult | undefined;
+```
+
+This is non-breaking: existing consumers that define `getRowDetail(row)` with one parameter work unchanged. Consumers needing raw data opt in via the second parameter.
 
 ## Detail rendering
 
@@ -257,22 +291,37 @@ interface AuditRecord {
 }
 ```
 
-### Rendering strategy
+### Row key derivation
 
-The `getRowDetail` callback branches on `eventType` first (always present), then on `payload.@type` for message-bearing events:
+The `getRowKey` function uses `TypedRow` cell accessors (not the fictional `get()` method):
 
 ```typescript
 // renderers/audit-detail.ts
 
-function renderAuditDetail(row: TypedRow): TemplateResult | undefined {
-  const eventType = row.get("eventType") as BridgeAuditEventType;
-  const payload = row.get("payload") as BridgeMessagePayload | null;
-  const correlationId = row.get("correlationId") as string | null;
+function auditRowKey(row: TypedRow): string {
+  const at = row.date("occurredAt" as ColumnId).toISOString();
+  const type = row.text("eventType" as ColumnId);
+  const devCell = row.cell("deviceId" as ColumnId);
+  const dev = devCell.type === "NULL" ? "system" : (devCell as { value: string }).value;
+  return `${at}-${type}-${dev}`;
+}
+```
+
+### Rendering strategy
+
+The `getRowDetail` callback receives the raw `AuditRecord` as an optional second parameter (via upstream change #4). This bypasses the `TypedRow` cell pipeline entirely for detail rendering — the `payload` field (a complex `BridgeMessage` object with nested polymorphic types) would be destroyed by the `CellValue` conversion (which only supports TEXT, NUMBER, DATE, LABEL, NULL).
+
+```typescript
+// renderers/audit-detail.ts
+
+function renderAuditDetail(row: TypedRow, rawEntry?: unknown): TemplateResult | undefined {
+  const record = rawEntry as AuditRecord | undefined;
+  if (!record) return undefined;
 
   return html`
     <div class="audit-detail">
-      ${renderPayload(eventType, payload)}
-      ${correlationId ? renderCorrelation(correlationId) : nothing}
+      ${renderPayload(record.eventType, record.payload)}
+      ${record.correlationId ? renderCorrelation(record.correlationId) : nothing}
     </div>
   `;
 }
@@ -341,13 +390,17 @@ function fetchCorrelation(correlationId: string): Promise<AuditRecord[]> {
       fetch(`/api/bridge/audit?correlationId=${correlationId}`)
         .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then(body => body.records)
+        .catch(err => {
+          correlationCache.delete(correlationId);
+          throw err;
+        })
     );
   }
   return correlationCache.get(correlationId)!;
 }
 ```
 
-**States:** Loading (until fallback shown), success (related events rendered), error (error message shown via `.catch()`).
+**States:** Loading (until fallback shown), success (related events rendered, cached), error (error message shown via `.catch()`, cache entry deleted so next expand retries).
 
 ## Component registration
 
@@ -433,7 +486,7 @@ Trail tab → expand row → correlationId != null
 - Tailored detail rendering per BridgeMessage variant
 - TypeScript type model for BridgeMessage
 - Correlation display via server-side query
-- Upstream pages-event-trail fixes (configure, recordsPath, csvExport)
+- Upstream pages-event-trail fixes (configure, recordsPath, csvExport, raw entry pass-through)
 
 **Out of scope:**
 - Pagination for the Trail view — the Trail endpoint is configured with `limit=500` (the maximum). At typical bridge event rates this covers a meaningful time window. Pagination support is a separate upstream enhancement if needed at production volume.
@@ -445,14 +498,15 @@ Trail tab → expand row → correlationId != null
 
 ### Phase 0: Upstream issue filing (spec deliverable)
 
-File issue against casehub-pages documenting the three upstream fixes as cross-repo dependencies. This is a spec deliverable, not deferred to implementation — the issue documents the contract and enables planning.
+File issue against casehub-pages documenting the four upstream fixes as cross-repo dependencies. This is a spec deliverable, not deferred to implementation — the issue documents the contract and enables planning.
 
 ### Phase 1: Upstream fixes (casehub-pages)
 
-Implement the three targeted fixes to `pages-event-trail.ts`:
+Implement the four targeted fixes to `pages-event-trail.ts`:
 1. configure() property passthrough (getRowDetail, getRowKey, columnRenderers)
 2. recordsPath for wrapped responses
 3. csvExport passthrough
+4. Raw entry pass-through for getRowDetail (WeakMap-based TypedRow → raw entry mapping)
 
 Publish SNAPSHOT. Update IoT webapp's pages dependency.
 
