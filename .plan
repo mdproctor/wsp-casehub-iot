@@ -22,3 +22,6 @@ flyway-next-v: unknown
     - [x] Task 4: Component registration + audit refactor + filter adapter
   - [x] Batch 4: Correlation
     - [x] Task 5: Correlation fetch cache and render
+
+## Deferred
+- [ ] Shared filter adapter for cross-tab filter sync (S / Med) [casehubio/iot] — Requires understanding pages-runtime ContextManager filter event model. Per-tab filters implemented as interim.
