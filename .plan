@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-103-evaluate-bridge-audit-viewer
-state: scaffolded
+state: active
 project-sha: 9b084bea19555189966a6d546f5ffd8547c50add
 date: 2026-09-23
 issue-repo: casehubio/iot
@@ -13,12 +13,12 @@ flyway-next-v: unknown
 
 ## Queue
 - [ ] casehubio/iot#103 — Issue #103 ← active
-  - [ ] Batch 1: Upstream fixes
-    - [ ] Task 1: Harden pages-event-trail
-  - [ ] Batch 2: Types and renderers
-    - [ ] Task 2: TypeScript type model
-    - [ ] Task 3: Payload renderers
-  - [ ] Batch 3: Tab-toggled page
-    - [ ] Task 4: Component registration + audit refactor + filter adapter
-  - [ ] Batch 4: Correlation
-    - [ ] Task 5: Correlation fetch cache and render
+  - [x] Batch 1: Upstream fixes
+    - [x] Task 1: Harden pages-event-trail
+  - [x] Batch 2: Types and renderers
+    - [x] Task 2: TypeScript type model
+    - [x] Task 3: Payload renderers
+  - [x] Batch 3: Tab-toggled page
+    - [x] Task 4: Component registration + audit refactor + filter adapter
+  - [x] Batch 4: Correlation
+    - [x] Task 5: Correlation fetch cache and render
