@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-114-vitest-audit-tests
-state: closing:review
+state: closing:verified
 project-sha: 5804ad669b064bc79ae897906ed40bfea8ec0e08
 date: 2026-09-27
 issue-repo: casehubio/iot
