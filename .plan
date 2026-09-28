@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-114-vitest-audit-tests
-state: scaffolded
+state: active
 project-sha: 5804ad669b064bc79ae897906ed40bfea8ec0e08
 date: 2026-09-27
 issue-repo: casehubio/iot
@@ -12,5 +12,5 @@ design-section-hashes: 4d2cc5ab:## §1 Introduction and Goals|4f6b26ef:## §2 Co
 flyway-next-v: none
 
 ## Queue
-- [ ] casehubio/iot#114 — Issue #114 ← active
-- [ ] casehubio/iot#115 — Shared-filter-adapter-for-cross-tab-audit-filter-sync
+- [x] casehubio/iot#114 — Issue #114
+- [x] casehubio/iot#115 — Shared-filter-adapter-for-cross-tab-audit-filter-sync
