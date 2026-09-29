@@ -1,1 +1,1 @@
-# Design Journal — issue-114-vitest-audit-tests
+# Design Journal — issue-121-iot-desired-state-epic

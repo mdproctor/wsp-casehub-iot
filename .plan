@@ -1,0 +1,15 @@
+# Work Plan — issue-121-iot-desired-state-epic
+
+## State
+branch: issue-121-iot-desired-state-epic
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/iot
+covers: 121
+design-repo: project
+design-section-hashes: 
+flyway-next-v: none
+
+## Queue
+- [ ] casehubio/iot#121 — Issue #121 ← active
