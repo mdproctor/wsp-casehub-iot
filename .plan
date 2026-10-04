@@ -1,0 +1,15 @@
+# Work Plan — issue-127-location-hierarchy-enrichment
+
+## State
+branch: issue-127-location-hierarchy-enrichment
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/iot
+covers: 127
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/iot#127 — Issue #127 ← active
