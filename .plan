@@ -1,0 +1,15 @@
+# Work Plan — issue-126-desired-state-delivery
+
+## State
+branch: issue-126-desired-state-delivery
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/iot
+covers: 126
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/iot#126 — Issue #126 ← active
