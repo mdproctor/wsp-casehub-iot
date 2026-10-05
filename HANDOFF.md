@@ -2,20 +2,19 @@
 
 ## Last Session
 
-Implemented #125 — declarative ordering constraints for IoT desired state (landed as eca55ae). Full lifecycle: brainstormed 8 design decisions with standard adversarial review (3 HIGH findings caught and addressed), implemented 6 tasks across 4 batches, code review clean, branch audit clean, squashed and pushed.
-
-Key design choice: composite NodeTypes (`device-config/light`, `physical-device/lock`) so the foundation `OrderingConstraint(NodeType, NodeType)` mechanism works at DeviceClass granularity without custom resolution logic. Two-constraint expansion (same-prefix only) — cross-prefix ordering handled by existing within-device dependency edges.
+Implemented #127 — location hierarchy enrichment for both HA and OpenHAB providers (landed as ea3440b). `DeviceEntity.location()` now populated with hierarchical `/`-delimited paths. HA: joins area/floor/entity/device registries via REST (2024.6+), slugified names, optional `casehub.iot.homeassistant.location-prefix` config. OpenHAB: walks semantic model Location group tree. Both mappers use `volatile locationMap` for thread safety. Filed casehub-pages#516 (DeliveryHandler SPI) — now closed, unblocking #126.
 
 ## Immediate Next Step
 
-Pick up #127 (location hierarchy enrichment, S/Low) or #126 (delivery mode, S/Med — needs DeliveryHandler SPI in casehub-pages first).
+Pick up #126 (desired-state scenario delivery mode, S/Med) — the prerequisite DeliveryHandler SPI landed in casehub-pages. This is the last item in epic #121.
 
 ## Known Issues
 
 - **webapp-api test compilation** — `WorkItemOutcomeRecorderTest` and `WorkItemPredictionServiceTest` have pre-existing compile errors (upstream `CbrRecordOps` interface changed). Excluded via `<testExcludes>` in webapp pom.
+- **QuarkusTest in provider modules** — `ProviderActivationTest` (OpenHAB) and integration tests in both modules fail with `UnsatisfiedResolutionException: SimulationRuntime`. Pre-existing — unit tests run fine.
 
 ## References
 
-- Design spec: `docs/specs/issue-125-declarative-ordering-constraints/2026-10-04-declarative-ordering-constraints-design.md`
-- Decisions: `docs/specs/issue-125-declarative-ordering-constraints/decisions.md`
-- Epic issue: casehubio/iot#121 (2 remaining: #126, #127)
+- Blog: `docs/blog/2026-10-04-mdp01-location-hierarchy-enrichment.md`
+- Epic issue: casehubio/iot#121 (1 remaining: #126)
+- DeliveryHandler SPI: casehubio/casehub-pages#516 (closed)
