@@ -1,0 +1,15 @@
+# Work Plan — issue-129-scenario-topology-binding
+
+## State
+branch: issue-129-scenario-topology-binding
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/iot
+covers: 129
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/iot#129 — Issue #129 ← active
