@@ -8,9 +8,12 @@ Design review (Standard) caught that push WebSocket was wrong transport — SSE 
 
 Filed #131 (command binding with execution context, M/High), #132 (topology SSE tenancy filtering, S/Med). Updated epic #121.
 
-## Immediate Next Step
+## Recommended Queue Order
 
-Pick up #128 (evaluate fsitrading playbook UI, S/Low) or #130 (reactive trigger → drift override, M/High). #130 is the last high-complexity item in the epic.
+1. **#132** — Topology SSE tenancy filtering (S/Med). Quick win — fixes known broadcast tenancy leak documented in ARC42STORIES. Standalone.
+2. **#128** — Evaluate fsitrading playbook UI (S/Low). Investigation task, not implementation. Informs whether the playbook UI direction is viable.
+3. **#131** — Command binding with execution context (M/High). Builds on #129's architecture — needs plugin SPI changes to thread executionId through `IoTCommandPlugin`.
+4. **#130** — Reactive trigger → drift override (M/High). Largest remaining epic item. Tackle last when smaller items are cleared.
 
 ## Known Issues
 
@@ -20,5 +23,5 @@ Pick up #128 (evaluate fsitrading playbook UI, S/Low) or #130 (reactive trigger 
 
 ## References
 
-- Design spec: `docs/specs/issue-129-scenario-topology-binding/2026-10-06-scenario-topology-binding-design.md`
+- Design spec for #129: `docs/specs/issue-129-scenario-topology-binding/2026-10-06-scenario-topology-binding-design.md`
 - Epic issue: casehubio/iot#121 (remaining: #128, #130, #131, #132)
