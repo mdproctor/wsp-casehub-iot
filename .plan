@@ -1,0 +1,15 @@
+# Work Plan — issue-131-command-binding-exec-context
+
+## State
+branch: issue-131-command-binding-exec-context
+state: scaffolded
+project-sha: 
+date: 
+issue-repo: casehubio/iot
+covers: 131
+design-repo: 
+design-section-hashes: 
+flyway-next-v: 
+
+## Queue
+- [ ] casehubio/iot#131 — Issue #131 ← active
