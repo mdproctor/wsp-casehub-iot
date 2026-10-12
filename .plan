@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-133-wire-playbook-controller
-state: closing:review
+state: closing:verified
 project-sha: 
 date: 
 issue-repo: casehubio/iot
