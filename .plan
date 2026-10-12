@@ -13,3 +13,6 @@ flyway-next-v:
 
 ## Queue
 - [ ] casehubio/iot#134 — Issue #134 ← active
+  - [ ] Batch 1: Step catalog
+    - [ ] Task 1: Write failing test
+    - [ ] Task 2: Create iot-steps.yaml and pass tests
