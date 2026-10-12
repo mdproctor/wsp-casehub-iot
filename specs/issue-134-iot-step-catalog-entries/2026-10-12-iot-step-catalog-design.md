@@ -98,8 +98,9 @@ Applies a desired device state configuration via the desired-state convergence e
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
-| `preset` | STRING | no | Named preset to apply (e.g. `nighttime`, `morning`, `away`). Resolved via `IoTPresetResolver` with import composition and last-wins merge. |
-| `devices` | OBJECT | no | Inline device goals — map of deviceId to desired capability state (alternative to preset) |
+| `preset` | STRING | no | Named preset to apply (e.g. `nighttime`, `morning`, `away`). Resolved via `IoTPresetResolver` with import composition and last-wins merge. Mutually exclusive with inline device goals. |
+
+When `preset` is not specified, remaining keys are treated as inline device goals — each key is a device ID mapping to a desired capability state object (e.g. `light-living-1: { state: "ON", brightness: 80 }`). This open-map pattern cannot be fully expressed in the catalog schema; the catalog entry documents the `preset` input and describes the inline alternative in the description.
 
 **Outputs:**
 
