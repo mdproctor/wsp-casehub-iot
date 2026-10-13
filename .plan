@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-134-iot-step-catalog-entries
-state: closing:merged
+state: closing:stamped
 project-sha: 
 date: 
 issue-repo: casehubio/iot
