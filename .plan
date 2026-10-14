@@ -2,7 +2,7 @@
 
 ## State
 branch: issue-141-rename-scenarios-playbooks-dock
-state: active
+state: closing:review
 project-sha: 
 date: 
 issue-repo: casehubio/iot
@@ -11,5 +11,6 @@ design-repo:
 design-section-hashes: 
 flyway-next-v: 
 
+evidence-era: true
 ## Queue
 - [ ] casehubio/iot#141 — Issue #141 ← active
