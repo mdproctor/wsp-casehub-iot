@@ -2,36 +2,42 @@
 
 ## Last Session
 
-### #130 — Reactive trigger → drift override binding (landed as 5e4bbd8)
+### #134 — Define IoT step catalog entries for yaml-core (landed as aad4ac7)
 
-Binds reactive trigger events (motion, manual, schedule) to drift exemptions with policy-governed revert. When a trigger fires, affected devices receive a temporary exemption from desired-state reconciliation that expires according to a declared revert condition.
+Created `iot-steps.yaml` in `webapp/src/main/resources/steps/` with three step catalog entries for the `PagesActionCatalog` UI:
+- `iot.command` — device command dispatch, MCP invoke binding to `iot_send_command`
+- `iot.state` — device state query, MCP invoke binding to `iot_get_state`
+- `iot.desired-state` — desired-state delivery handler, metadata-only (no invoke)
 
-**What was built:**
-- `TriggerSource` enum (MOTION/MANUAL/SCHEDULE/AUTOMATION/UNKNOWN) in api module
-- Provider-inferred trigger classification: HA context-based (user_id → MANUAL, parent_id → AUTOMATION, motion/occupancy device_class → MOTION), OH device-class-based (PRESENCE_SENSOR → MOTION)
-- `OverrideRule` + `RevertConfig` records with preset YAML `overrides:` section parsing (import composition, last-wins merge)
-- `TriggerDriftOverrideObserver` CDI observer grants exemptions via `ExemptionStore` on matching triggers
-- `ActivePresetRegistry` tracks applied preset per tenancy, wired into `DesiredStateDeliveryHandler` and `DefaultIoTPresetApi`
-- `DriftExemptionGrantedEvent`/`DriftExemptionRevokedEvent`/`DeviceDriftInfo` CDI events and REST records in webapp-api
-- `IoTDriftPolicy.isHardConstrained()` — LOCK/CAMERA never overridable
-- Code review caught NodeId keying bug (bare deviceId vs deviceId + "-config" suffix). Garden entry: GE-20261008-7cd3c1
+Test via `StepCatalogService` (not `DeclarationParser` — the latter throws on null invoke bindings). 9 tests covering parsing, invoke bindings, parameter types, required/optional constraints.
 
-**Deferred:** Frontend drift badge overlay → casehubio/casehub-pages#532 (S/Low). topology-viewer is a casehub-pages package.
+### Epic #140 — IoT Playbook Console (created, not started)
 
-### #133 — Wire PagesPlaybookController as IoT Scenarios page (landed as 8537204)
+New epic to upgrade the "Scenarios" page to a full operational "Playbooks" console. Compose platform UI components into a `dockWorkbench()` layout for browsing, executing, and monitoring IoT playbooks against simulated devices.
 
-Registered a Scenarios page in the IoT Console sidebar. Wired `PagesPlaybookController` (step outline, transport controls, library browser) with `PagesPlaybookYamlViewer` as companion panel. Added `@casehubio/pages-aria` portal resolution.
+**Decisions made:**
+- D1: Operational console scope — no visual authoring (PagesBuilderShell) or CRUD (ScriptRegistry REST) in this epic
+- D2: Presets (#136, #137) are a separate follow-on epic
+- D3: Keep playbook controller variants, rename page from "Scenarios" to "Playbooks"
 
-### Epic #121 — Closed
+**Sub-issues (8):**
+- #141 — Rename Scenarios → Playbooks + dockWorkbench layout (S/Low) — start here
+- #142 — Wire PagesActionCatalog panel (S/Low)
+- #143 — Wire PagesLibraryView panel (S/Low)
+- #144 — Wire PagesPlaybookNarrative panel (XS/Low)
+- #145 — Wire OrchestrationWorkbench panel (S/Med)
+- #146 — Dataset bindings and status bar (XS/Low)
+- #148 — Realistic device topology fixtures (M/Med) — apartments, houses, offices with HA/OH/hybrid providers
+- #147 — End-to-end simulation verification (S/Med) — acceptance gate, blocked by all above
 
-All 15 items landed. Epic covered: desiredstate module, topology visualization, presets, ordering constraints, drift policy, scenario delivery, scenario-topology binding, playbook UI evaluation, trigger→drift override binding, playbook controller wiring.
+**Design spec:** `specs/iot-playbook-console-epic/2026-10-13-iot-playbook-console-design.md` (in workspace)
 
 ## What's Next
 
-1. **#134** — Define IoT step catalog entries for yaml-core (S/Low). Catalog metadata for the scenario editor.
-2. **#135** — Expose ScriptRegistry via REST for scenario CRUD (S/Med). REST + persistence.
-3. **#136** — IoT preset composer — device picker UI (M/Med). Frontend-heavy.
-4. **#137** — Preset diff visualization panel (S/Low). Frontend, builds on preset API.
+1. **#141** — Rename + dockWorkbench layout (S/Low). Unblocks all other panel wiring issues. Start here.
+2. **#148** — Topology fixtures (M/Med). Can start in parallel with #141. Use internet research for realistic device layouts.
+3. **#142–#146** — Panel wiring (all S or XS). Independent, any order after #141 lands.
+4. **#147** — E2e verification (S/Med). Blocked by everything above. Acceptance gate for the epic.
 
 ## Known Issues
 
@@ -39,10 +45,12 @@ All 15 items landed. Epic covered: desiredstate module, topology visualization, 
 - **webapp-api test compilation** — `WorkItemOutcomeRecorderTest` and `WorkItemPredictionServiceTest` have pre-existing compile errors. Excluded via `<testExcludes>`.
 - **QuarkusTest in provider modules** — pre-existing `UnsatisfiedResolutionException: SimulationRuntime`. Unit tests run fine.
 - **topology-viewer tests** — pre-existing tsconfig.base.json issue prevents test runner from loading .casehub-packages/packages/topology-viewer. Not in vitest include glob.
+- **DeclarationParser null invoke** — `DeclarationParser.parseInvoke()` throws on null. Use `StepCatalogService` for testing step definitions that include metadata-only entries (no invoke binding).
 
 ## References
 
-- Design spec for #130: `specs/issue-121-iot-desired-state-epic/2026-10-07-trigger-drift-override-design.md` (in workspace)
-- Decisions D12-D15: `specs/issue-121-iot-desired-state-epic/decisions.md` (in workspace)
-- Garden entry: GE-20261008-7cd3c1 (ExemptionStore NodeId keying convention)
+- Design spec for #140: `specs/iot-playbook-console-epic/2026-10-13-iot-playbook-console-design.md` (in workspace)
+- Decisions D1-D3: `specs/iot-playbook-console-epic/decisions.md` (in workspace)
+- fsitrading ops-centre reference: `fsitrading/app/src/main/webui/src/ops-centre.ts`
+- Step catalog entries: `webapp/src/main/resources/steps/iot-steps.yaml`
 - Deferred frontend: casehubio/casehub-pages#532
