@@ -6,3 +6,4 @@
 | [2026-08-17-mdp01-five-bugs-one-branch.md](2026-08-17-mdp01-five-bugs-one-branch.md) | 2026-08-17 | Five OpenHAB provider bugs fixed in one branch — device class mapping, command dispatch, persistence unit, and a Quarkus upgrade that resolved the headline issue silently |
 | [2026-08-19-mdp01-blocks-ui-hostpanel.md](2026-08-19-mdp01-blocks-ui-hostpanel.md) | 2026-08-19 | How a decision review caught a wrong integration mechanism — html() vs hostPanel() for blocks-ui web components in pages-ui DSL |
 | [2026-09-27-mdp01-bridge-audit-trail-viewer.md](2026-09-27-mdp01-bridge-audit-trail-viewer.md) | 2026-09-27 | Tab-toggled audit page with pages-event-trail — upstream hardening over local workarounds |
+| [2026-10-14-mdp01-playbooks-dock-layout.md](2026-10-14-mdp01-playbooks-dock-layout.md) | 2026-10-14 | Renamed Scenarios to Playbooks with dockWorkbench layout; fixed CDI ambiguity and GraphQL transitive for quarkus:dev |
